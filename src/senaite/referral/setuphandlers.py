@@ -19,7 +19,6 @@
 # Some rights reserved, see README and LICENSE.
 
 from collections import OrderedDict
-import copy
 
 from bika.lims.api import UID_CATALOG
 from plone.registry.interfaces import IRegistry
@@ -40,17 +39,6 @@ from senaite.referral.config import PROFILE_ID
 from senaite.referral.config import UNINSTALL_ID
 from zope.component import getUtility
 
-# === i18n helpers ===
-from zope.i18n import translate
-from senaite.referral import messageFactory as _
-
-def _tx(portal, msgid):
-    """Translate msgid using domain 'senaite.referral' and the site's REQUEST."""
-    req = getattr(portal, 'REQUEST', None)
-    # msgid must exist in senaite.referral.po as the English id
-    return translate(_(msgid), domain='senaite.referral', context=req)
-
-
 CATALOGS = (
     InboundSampleCatalog,
     ShipmentCatalog,
@@ -65,11 +53,11 @@ INDEXES = [
 COLUMNS = [
 ]
 
-# Tuples of (folder_id, folder_title_msgid, portal_type)
-# NOTE: the second element is now the msgid (English) that will be translated
+
+# Tuples of (folder_id, folder_name, type)
 PORTAL_FOLDERS = [
-    ("external_labs", u"External laboratories", "ExternalLaboratoryFolder"),
-    ("shipments", u"Shipments", "ShipmentFolder"),
+    ("external_labs", "External laboratories", "ExternalLaboratoryFolder"),
+    ("shipments", "Shipments", "ShipmentFolder"),
 ]
 
 NAVTYPES = [
@@ -222,19 +210,16 @@ def setup_handler(context):
         return
 
     logger.info("setup handler [BEGIN]".format(PRODUCT_NAME.upper()))
-    portal = context.getSite()  # noqa
+    portal = context.getSite() # noqa
 
-    # Portal folders (create/normalize with translated titles)
+    # Portal folders
     add_portal_folders(portal)
 
     # Configure visible navigation items
     setup_navigation_types(portal)
 
-    # Setup workflows (titles/actions/descriptions localized before persisting)
+    # Setup worlflows
     setup_workflows(portal)
-
-    # Fix FTI action titles for ExternalLaboratory (Inbound/Outbound)
-    _fix_external_lab_actions(portal)
 
     # Setup ID formatting
     setup_id_formatting(portal)
@@ -288,32 +273,12 @@ def post_uninstall(portal_setup):
 
 
 def add_portal_folders(portal):
-    """Adds the product-specific portal folders with translated titles.
-    If they already exist with the English msgid, normalize to translated.
+    """Adds the product-specific portal folders
     """
     logger.info("Adding portal folders ...")
-    for folder_id, folder_title_msgid, portal_type in PORTAL_FOLDERS:
-        obj = portal.get(folder_id)
-        title_tx = _tx(portal, folder_title_msgid)
-
-        if obj is None:
-            # Create with translated title
-            portal.invokeFactory(portal_type, folder_id, title=title_tx)
-            obj = portal[folder_id]
-            obj.reindexObject()
-            continue
-
-        # If exists with msgid (English) as title, normalize to translated
-        try:
-            current_title = obj.Title()
-        except Exception:
-            current_title = getattr(obj, 'title', u'')
-        if current_title == folder_title_msgid and current_title != title_tx:
-            try:
-                obj.setTitle(title_tx)
-            except Exception:
-                setattr(obj, 'title', title_tx)
-            obj.reindexObject()
+    for folder_id, folder_name, portal_type in PORTAL_FOLDERS:
+        if portal.get(folder_id) is None:
+            portal.invokeFactory(portal_type, folder_id, title=folder_name)
 
     logger.info("Adding portal folders [DONE]")
 
@@ -321,4 +286,72 @@ def add_portal_folders(portal):
 def setup_navigation_types(portal):
     """Add additional types for navigation
     """
-    registry = getUti
+    registry = getUtility(IRegistry)
+    key = "plone.displayed_types"
+    display_types = registry.get(key, ())
+
+    new_display_types = set(display_types)
+    new_display_types.update(NAVTYPES)
+    registry[key] = tuple(new_display_types)
+
+
+def setup_workflows(portal):
+    """Setup workflow changes (status, transitions, permissions, etc.)
+    """
+    logger.info("Setup workflows ...")
+    for wf_id, settings in WORKFLOWS_TO_UPDATE.items():
+        update_workflow(wf_id, **settings)
+    logger.info("Setup workflows [DONE]")
+
+
+def setup_id_formatting(portal, format_definition=None):
+    """Setup default ID formatting
+    """
+    if not format_definition:
+        logger.info("Setting up ID formatting ...")
+        for formatting in ID_FORMATTING:
+            setup_id_formatting(portal, format_definition=formatting)
+        logger.info("Setting up ID formatting [DONE]")
+        return
+
+    bs = portal.bika_setup
+    p_type = format_definition.get("portal_type", None)
+    if not p_type:
+        return
+
+    form = format_definition.get("form", "")
+    if not form:
+        logger.info("Param 'form' for portal type {} not set [SKIP")
+        return
+
+    logger.info("Applying format '{}' for {}".format(form, p_type))
+    ids = list()
+    for record in bs.getIDFormatting():
+        if record.get('portal_type', '') == p_type:
+            continue
+        ids.append(record)
+    ids.append(format_definition)
+    bs.setIDFormatting(ids)
+
+
+def setup_catalogs(portal):
+    """Setup referral catalogs
+    """
+    logger.info("Setup referral catalogs ...")
+    setup_core_catalogs(portal, catalog_classes=CATALOGS)
+    setup_other_catalogs(portal, indexes=INDEXES, columns=COLUMNS)
+    logger.info("Setup referral catalogs [DONE]")
+
+
+def setup_ajax_transitions(portal):
+    """Setup the transitions from senaite.referral that have to be processed
+    asynchronously by default when the setting "Enable Ajax Transitions" for
+    listings is active
+    """
+    logger.info("Setup ajax transitions ...")
+    key = "listing_active_ajax_transitions"
+    transitions = get_registry_record("listing_active_ajax_transitions") or []
+    transitions.extend(list(AJAX_TRANSITIONS))
+    transitions = list(OrderedDict.fromkeys(transitions))
+    set_registry_record(key, transitions)
+    logger.info("Setup ajax transitions [DONE]")
