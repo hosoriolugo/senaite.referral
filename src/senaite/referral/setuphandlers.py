@@ -40,20 +40,24 @@ from senaite.referral.config import PROFILE_ID
 from senaite.referral.config import UNINSTALL_ID
 from zope.component import getUtility
 
-# --- i18n helper con import perezoso (evita ciclos en el arranque) ---
+# --- i18n helper con import perezoso (evita ciclos de import en el arranque) ---
 def _tx(portal, msgid):
-    """Traduce msgid usando el dominio 'senaite.referral' y el REQUEST del sitio.
-    Importa zope.i18n y messageFactory solo cuando se llama (no a nivel de módulo).
-    """
+    """Traduce msgid con dominio 'senaite.referral' forzando el idioma del sitio."""
     try:
         from zope.i18n import translate
         from senaite.referral import messageFactory as _
     except Exception:
-        # Si por alguna razón falla el import en arranque temprano, devuelve msgid
         return msgid
-    req = getattr(portal, 'REQUEST', None)
+    # Forzar idioma del sitio: funciona incluso si no hay REQUEST durante instalación
     try:
-        return translate(_(msgid), domain='senaite.referral', context=req)
+        langtool = getattr(portal, 'portal_languages', None)
+        lang = langtool.getDefaultLanguage() if langtool else 'es'
+        if not lang:
+            lang = 'es'
+    except Exception:
+        lang = 'es'
+    try:
+        return translate(_(msgid), domain='senaite.referral', target_language=lang)
     except Exception:
         return msgid
 
@@ -262,15 +266,11 @@ def pre_install(portal_setup):
 
 def post_install(portal_setup):
     logger.info("{} install handler [BEGIN]".format(PRODUCT_NAME.upper()))
-    # context = portal_setup._getImportContext(PROFILE_ID)  # noqa
-    # portal = context.getSite()  # noqa
     logger.info("{} install handler [DONE]".format(PRODUCT_NAME.upper()))
 
 
 def post_uninstall(portal_setup):
     logger.info("{} uninstall handler [BEGIN]".format(PRODUCT_NAME.upper()))
-    # context = portal_setup._getImportContext(UNINSTALL_ID)  # noqa
-    # portal = context.getSite()  # noqa
     logger.info("{} uninstall handler [DONE]".format(PRODUCT_NAME.upper()))
 
 
@@ -288,12 +288,17 @@ def add_portal_folders(portal):
             obj.reindexObject()
             continue
 
-        # Si existe y tiene el msgid crudo, normaliza al traducido
+        # Si existe, normaliza si está vacío o todavía en inglés (msgid)
         try:
             current_title = obj.Title()
         except Exception:
-            current_title = getattr(obj, 'title', u'')
-        if current_title == folder_title_msgid and current_title != title_tx:
+            current_title = getattr(obj, 'title', u'') or u''
+
+        should_normalize = (
+            not current_title or
+            current_title.strip().lower() == folder_title_msgid.lower()
+        )
+        if should_normalize and current_title != title_tx:
             try:
                 obj.setTitle(title_tx)
             except Exception:
