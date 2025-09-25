@@ -19,6 +19,7 @@
 # Some rights reserved, see README and LICENSE.
 
 from collections import OrderedDict
+import copy
 
 from bika.lims.api import UID_CATALOG
 from plone.registry.interfaces import IRegistry
@@ -39,6 +40,24 @@ from senaite.referral.config import PROFILE_ID
 from senaite.referral.config import UNINSTALL_ID
 from zope.component import getUtility
 
+# --- i18n helper con import perezoso (evita ciclos en el arranque) ---
+def _tx(portal, msgid):
+    """Traduce msgid usando el dominio 'senaite.referral' y el REQUEST del sitio.
+    Importa zope.i18n y messageFactory solo cuando se llama (no a nivel de módulo).
+    """
+    try:
+        from zope.i18n import translate
+        from senaite.referral import messageFactory as _
+    except Exception:
+        # Si por alguna razón falla el import en arranque temprano, devuelve msgid
+        return msgid
+    req = getattr(portal, 'REQUEST', None)
+    try:
+        return translate(_(msgid), domain='senaite.referral', context=req)
+    except Exception:
+        return msgid
+
+
 CATALOGS = (
     InboundSampleCatalog,
     ShipmentCatalog,
@@ -53,11 +72,11 @@ INDEXES = [
 COLUMNS = [
 ]
 
-
-# Tuples of (folder_id, folder_name, type)
+# Tuples of (folder_id, folder_title_msgid, portal_type)
+# IMPORTANTE: el 2º elemento es el msgid en inglés (debe existir en el .po)
 PORTAL_FOLDERS = [
-    ("external_labs", "External laboratories", "ExternalLaboratoryFolder"),
-    ("shipments", "Shipments", "ShipmentFolder"),
+    ("external_labs", u"External laboratories", "ExternalLaboratoryFolder"),
+    ("shipments", u"Shipments", "ShipmentFolder"),
 ]
 
 NAVTYPES = [
@@ -81,7 +100,6 @@ WORKFLOWS_TO_UPDATE = {
                     "reject_at_reference",
                     "recall_from_shipment"
                 ),
-                # Sample is read-only
                 "permissions_copy_from":  "invalid",
             },
             "received_at_reference": {
@@ -92,14 +110,12 @@ WORKFLOWS_TO_UPDATE = {
                     "reject_at_reference",
                     "invalidate_at_reference",
                 ),
-                # Sample is read-only
                 "permissions_copy_from":  "invalid",
             },
             "rejected_at_reference": {
                 "title": "Rejected at reference lab",
                 "description": "Sample rejected at reference laboratory",
                 "transitions": ("recall_from_shipment",),
-                # Sample is read-only
                 "permissions_copy_from": "invalid",
             },
             "invalidated_at_reference": {
@@ -171,7 +187,6 @@ WORKFLOWS_TO_UPDATE = {
                 "title": "Referred",
                 "description": "Analysis is referred to reference laboratory",
                 "transitions": ("submit",),
-                # Analysis is read-only
                 "permissions_copy_from": "rejected",
             }
         },
@@ -191,7 +206,6 @@ WORKFLOWS_TO_UPDATE = {
 }
 
 ID_FORMATTING = [
-    # An array of dicts. Each dict represents an ID formatting configuration
     {
         "portal_type": "OutboundSampleShipment",
         "form": "{lab_code}{year}{alpha:2a3d}",
@@ -210,36 +224,34 @@ def setup_handler(context):
         return
 
     logger.info("setup handler [BEGIN]".format(PRODUCT_NAME.upper()))
-    portal = context.getSite() # noqa
+    portal = context.getSite()  # noqa
 
-    # Portal folders
+    # 1) Carpetas del portal (crear/normalizar con título traducido)
     add_portal_folders(portal)
 
-    # Configure visible navigation items
+    # 2) Tipos visibles en navegación
     setup_navigation_types(portal)
 
-    # Setup worlflows
+    # 3) Workflows (dejamos tal cual para minimizar cambios)
     setup_workflows(portal)
 
-    # Setup ID formatting
+    # 4) Arreglo seguro: fijar títulos de acciones del FTI ExternalLaboratory
+    _fix_external_lab_actions(portal)
+
+    # 5) ID formatting
     setup_id_formatting(portal)
 
-    # Setup catalogs
+    # 6) Catálogos
     setup_catalogs(portal)
 
     logger.info("{} setup handler [DONE]".format(PRODUCT_NAME.upper()))
 
 
 def pre_install(portal_setup):
-    """Runs before the first import step of the *default* profile
-    This handler is registered as a *pre_handler* in the generic setup profile
-    :param portal_setup: SetupTool
-    """
     logger.info("{} pre-install handler [BEGIN]".format(PRODUCT_NAME.upper()))
     context = portal_setup._getImportContext(PROFILE_ID)  # noqa
     portal = context.getSite()
 
-    # Only install senaite.lims once!
     qi = portal.portal_quickinstaller
     if not qi.isProductInstalled("senaite.lims"):
         profile_name = "profile-senaite.lims:default"
@@ -249,43 +261,49 @@ def pre_install(portal_setup):
 
 
 def post_install(portal_setup):
-    """Runs after the last import step of the *default* profile
-    This handler is registered as a *post_handler* in the generic setup profile
-    :param portal_setup: SetupTool
-    """
     logger.info("{} install handler [BEGIN]".format(PRODUCT_NAME.upper()))
-    context = portal_setup._getImportContext(PROFILE_ID)  # noqa
-    portal = context.getSite()  # noqa
-
+    # context = portal_setup._getImportContext(PROFILE_ID)  # noqa
+    # portal = context.getSite()  # noqa
     logger.info("{} install handler [DONE]".format(PRODUCT_NAME.upper()))
 
 
 def post_uninstall(portal_setup):
-    """Runs after the last import step of the *uninstall* profile
-    This handler is registered as a *post_handler* in the generic setup profile
-    :param portal_setup: SetupTool
-    """
     logger.info("{} uninstall handler [BEGIN]".format(PRODUCT_NAME.upper()))
-    context = portal_setup._getImportContext(UNINSTALL_ID)  # noqa
-    portal = context.getSite()  # noqa
-
+    # context = portal_setup._getImportContext(UNINSTALL_ID)  # noqa
+    # portal = context.getSite()  # noqa
     logger.info("{} uninstall handler [DONE]".format(PRODUCT_NAME.upper()))
 
 
 def add_portal_folders(portal):
-    """Adds the product-specific portal folders
+    """Crea carpetas con título traducido y normaliza si existen con msgid en inglés.
     """
     logger.info("Adding portal folders ...")
-    for folder_id, folder_name, portal_type in PORTAL_FOLDERS:
-        if portal.get(folder_id) is None:
-            portal.invokeFactory(portal_type, folder_id, title=folder_name)
+    for folder_id, folder_title_msgid, portal_type in PORTAL_FOLDERS:
+        obj = portal.get(folder_id)
+        title_tx = _tx(portal, folder_title_msgid)
+
+        if obj is None:
+            portal.invokeFactory(portal_type, folder_id, title=title_tx)
+            obj = portal[folder_id]
+            obj.reindexObject()
+            continue
+
+        # Si existe y tiene el msgid crudo, normaliza al traducido
+        try:
+            current_title = obj.Title()
+        except Exception:
+            current_title = getattr(obj, 'title', u'')
+        if current_title == folder_title_msgid and current_title != title_tx:
+            try:
+                obj.setTitle(title_tx)
+            except Exception:
+                setattr(obj, 'title', title_tx)
+            obj.reindexObject()
 
     logger.info("Adding portal folders [DONE]")
 
 
 def setup_navigation_types(portal):
-    """Add additional types for navigation
-    """
     registry = getUtility(IRegistry)
     key = "plone.displayed_types"
     display_types = registry.get(key, ())
@@ -296,7 +314,8 @@ def setup_navigation_types(portal):
 
 
 def setup_workflows(portal):
-    """Setup workflow changes (status, transitions, permissions, etc.)
+    """Aplicamos los cambios de workflow tal cual (sin localizar aquí para
+    minimizar el impacto). Si luego quieres localizarlos también, lo hacemos aparte.
     """
     logger.info("Setup workflows ...")
     for wf_id, settings in WORKFLOWS_TO_UPDATE.items():
@@ -304,9 +323,43 @@ def setup_workflows(portal):
     logger.info("Setup workflows [DONE]")
 
 
-def setup_id_formatting(portal, format_definition=None):
-    """Setup default ID formatting
+def _fix_external_lab_actions(portal):
+    """Traduce títulos de acciones 'inbound_shipments'/'outbound_shipments'
+    del FTI ExternalLaboratory. Se ejecuta en setup_handler (sitio ya listo).
     """
+    try:
+        ptool = portal.portal_types
+    except Exception:
+        return
+    fti_id = 'ExternalLaboratory'
+    if fti_id not in ptool.objectIds():
+        return
+
+    fti = ptool[fti_id]
+    actions = list(getattr(fti, '_actions', []) or [])
+    changed = False
+
+    for a in actions:
+        aid = getattr(a, 'id', None)
+        if aid == 'inbound_shipments':
+            title_tx = _tx(portal, u"Inbound Shipments")
+            if getattr(a, 'title', None) != title_tx:
+                a.title = title_tx
+                changed = True
+        elif aid == 'outbound_shipments':
+            title_tx = _tx(portal, u"Outbound Shipments")
+            if getattr(a, 'title', None) != title_tx:
+                a.title = title_tx
+                changed = True
+
+    if changed:
+        try:
+            fti._p_changed = True
+        except Exception:
+            pass
+
+
+def setup_id_formatting(portal, format_definition=None):
     if not format_definition:
         logger.info("Setting up ID formatting ...")
         for formatting in ID_FORMATTING:
@@ -335,8 +388,6 @@ def setup_id_formatting(portal, format_definition=None):
 
 
 def setup_catalogs(portal):
-    """Setup referral catalogs
-    """
     logger.info("Setup referral catalogs ...")
     setup_core_catalogs(portal, catalog_classes=CATALOGS)
     setup_other_catalogs(portal, indexes=INDEXES, columns=COLUMNS)
@@ -344,10 +395,6 @@ def setup_catalogs(portal):
 
 
 def setup_ajax_transitions(portal):
-    """Setup the transitions from senaite.referral that have to be processed
-    asynchronously by default when the setting "Enable Ajax Transitions" for
-    listings is active
-    """
     logger.info("Setup ajax transitions ...")
     key = "listing_active_ajax_transitions"
     transitions = get_registry_record("listing_active_ajax_transitions") or []
