@@ -1,0 +1,52 @@
+<configure
+  xmlns="http://namespaces.zope.org/zope"
+  i18n_domain="senaite.referral">
+
+  <!-- Package includes -->
+  <include package=".guards"/>
+  <include package=".listing"/>
+
+  <!-- Adapter that returns additional variables for ID Server -->
+  <adapter
+    for="senaite.referral.interfaces.IInboundSampleShipment"
+    provides="bika.lims.interfaces.IIdServerVariables"
+    factory=".idserver.IDServerVariablesAdapter" />
+  <adapter
+    for="senaite.referral.interfaces.IOutboundSampleShipment"
+    provides="bika.lims.interfaces.IIdServerVariables"
+    factory=".idserver.IDServerVariablesAdapter" />
+
+  <!-- Adapter that returns AnalysisRequestFromShipment type -->
+  <adapter
+    for="bika.lims.interfaces.IAnalysisRequest"
+    provides="bika.lims.interfaces.IIdServerTypeID"
+    factory=".idserver.IDServerSampleTypeIDAdapter" />
+
+  <!-- Adapter that returns additional variables for ID server -->
+  <adapter
+    for="bika.lims.interfaces.IAnalysisRequest"
+    provides="bika.lims.interfaces.IIdServerVariables"
+    factory=".idserver.IDServerSampleVariablesAdapter" />
+
+  <!-- Default value for OutboundShipment field in Add Sample form -->
+  <adapter
+    for="*"
+    provides="bika.lims.interfaces.IGetDefaultFieldValueARAddHook"
+    factory=".addsample.OutboundShipmentDefaultFieldValue"
+    name = "OutboundShipment_default_value_hook" />
+
+  <!-- Visibility of OutboundShipment field in AnalysisRequest context -->
+  <adapter
+    for="bika.lims.interfaces.IAnalysisRequest"
+    provides="bika.lims.interfaces.IATWidgetVisibility"
+    factory=".visibility.InboundShipmentFieldVisibility"
+    name="senaite.referral.visibility.analysisrequest.inboundshipment" />
+
+  <!-- Visibility of OutboundShipment field in AnalysisRequest context -->
+  <adapter
+    for="bika.lims.interfaces.IAnalysisRequest"
+    provides="bika.lims.interfaces.IATWidgetVisibility"
+    factory=".visibility.OutboundShipmentFieldVisibility"
+    name="senaite.referral.visibility.analysisrequest.outboundshipment" />
+
+</configure>

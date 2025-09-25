@@ -1,0 +1,88 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:genericsetup="http://namespaces.zope.org/genericsetup">
+
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: Setup outbound samples sorting config"
+      description="Setup outbound samples sorting config"
+      source="2008"
+      destination="2009"
+      handler=".v02_00_000.setup_outbound_samples_order"
+      profile="senaite.referral:default"/>
+
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: Adds 'remote_uid' index in 'uid_catalog'"
+      description="Adds 'remote_uid' index in 'uid_catalog'"
+      source="2007"
+      destination="2008"
+      handler=".v02_00_000.add_remote_uid_index"
+      profile="senaite.referral:default"/>
+
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: Additional results notification settings"
+      description="Additional results notification settings"
+      source="2006"
+      destination="2007"
+      handler=".v02_00_000.additional_results_notification"
+      profile="senaite.referral:default"/>
+
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: Setup results notification settings"
+      description="Setup results notification settings"
+      source="2005"
+      destination="2006"
+      handler=".v02_00_000.setup_results_notification"
+      profile="senaite.referral:default"/>
+
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: Store service uids in inbound sample"
+      description="Store service uids in inbound sample"
+      source="2004"
+      destination="2005"
+      handler=".v02_00_000.setup_inbound_services"
+      profile="senaite.referral:default"/>
+
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: New transition: 'Receive at reference'"
+      description="Added the transition 'receive_at_reference'"
+      source="2003"
+      destination="2004"
+      handler=".v02_00_000.setup_receive_at_reference"
+      profile="senaite.referral:default"/>
+
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: Invalidate at reference laboratory"
+      description="Added the transition 'invalidate_at_reference'"
+      source="2002"
+      destination="2003"
+      handler=".v02_00_000.setup_invalidate_at_reference"
+      profile="senaite.referral:default"/>
+
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: Fix received inbound samples without type"
+      description="
+        Walks through all inbound samples without sample counterpart that
+        belong to shipments in due status and transitions them to due status"
+      source="2001"
+      destination="2002"
+      handler=".v02_00_000.fix_received_samples_wo_type"
+      profile="senaite.referral:default"/>
+
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: Setup async transitions"
+      description="Setup default ajax transitions"
+      source="2000"
+      destination="2001"
+      handler=".v02_00_000.setup_ajax_transitions"
+      profile="senaite.referral:default"/>
+
+  <!-- Setup chunk size for inbound sample reception -->
+  <genericsetup:upgradeStep
+      title="SENAITE.REFERRAL 2.0.0: Allow to recall a sample from shipment"
+      description="Added the transition 'recall_from_shipment'"
+      source="1005"
+      destination="2000"
+      handler=".v02_00_000.upgrade"
+      profile="senaite.referral:default"/>
+
+</configure>

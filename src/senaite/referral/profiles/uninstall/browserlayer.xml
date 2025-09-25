@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<layers>
+  <layer name="senaite.referral"
+         interface="senaite.referral.interfaces.ISenaiteReferralLayer"
+         remove="true" />
+  <layer name="senaite.referral.forms"
+         interface="senaite.referral.interfaces.ISenaiteReferralFormLayer"
+         remove="true" />
+</layers>

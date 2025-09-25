@@ -1,0 +1,44 @@
+<configure
+  xmlns="http://namespaces.zope.org/zope"
+  xmlns:browser="http://namespaces.zope.org/browser"
+  i18n_domain="senaite.referral">
+
+  <!-- Handler for "content_status_modify"-like requests
+  This adapter is in charge to process workflow action requests when an option
+  from actions menu header from context's view is clicked. Request is processed
+  by same handler as for "workflow_action"-like requests, so named adapters for
+  "workflow_action_<action_id>" are called too.
+  TODO 2.x Remove as per https://github.com/senaite/senaite.core/pull/1944
+  -->
+  <browser:page
+    for="*"
+    name="content_status_modify"
+    class="bika.lims.browser.workflow.WorkflowActionHandler"
+    permission="zope.Public"
+    layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
+
+  <!-- After event handler for InboundSample -->
+  <subscriber
+    for="senaite.referral.interfaces.IInboundSample
+         Products.DCWorkflow.interfaces.IAfterTransitionEvent"
+    handler=".inboundsample.AfterTransitionEventHandler" />
+
+  <!-- After event handler for InboundSampleShipment -->
+  <subscriber
+    for="senaite.referral.interfaces.IInboundSampleShipment
+         Products.DCWorkflow.interfaces.IAfterTransitionEvent"
+    handler=".inboundshipment.AfterTransitionEventHandler" />
+
+  <!-- After event handler for OutboundSampleShipment -->
+  <subscriber
+    for="senaite.referral.interfaces.IOutboundSampleShipment
+         Products.DCWorkflow.interfaces.IAfterTransitionEvent"
+    handler=".outboundshipment.AfterTransitionEventHandler" />
+
+  <!-- After event handler for AnalysisRequest -->
+  <subscriber
+    for="bika.lims.interfaces.IAnalysisRequest
+         Products.DCWorkflow.interfaces.IAfterTransitionEvent"
+    handler=".analysisrequest.AfterTransitionEventHandler" />
+
+</configure>

@@ -1,0 +1,54 @@
+<configure
+  xmlns="http://namespaces.zope.org/zope"
+  xmlns:monkey="http://namespaces.plone.org/monkey"
+  i18n_domain="senaite.referral">
+
+  <monkey:patch
+      class="bika.lims.content.analysis.Analysis"
+      original="getReferenceVerifiers"
+      ignoreOriginal="True"
+      replacement=".analysis.getReferenceVerifiers" />
+
+  <monkey:patch
+      class="bika.lims.content.analysis.Analysis"
+      original="setReferenceVerifiers"
+      ignoreOriginal="True"
+      replacement=".analysis.setReferenceVerifiers" />
+
+  <monkey:patch
+      class="bika.lims.content.analysis.Analysis"
+      original="getReferenceAnalysts"
+      ignoreOriginal="True"
+      replacement=".analysis.getReferenceAnalysts" />
+
+  <monkey:patch
+      class="bika.lims.content.analysis.Analysis"
+      original="setReferenceAnalysts"
+      ignoreOriginal="True"
+      replacement=".analysis.setReferenceAnalysts" />
+
+  <monkey:patch
+      class="bika.lims.content.analysis.Analysis"
+      original="getReferenceInstrument"
+      ignoreOriginal="True"
+      replacement=".analysis.getReferenceInstrument" />
+
+  <monkey:patch
+      class="bika.lims.content.analysis.Analysis"
+      original="setReferenceInstrument"
+      ignoreOriginal="True"
+      replacement=".analysis.setReferenceInstrument" />
+
+  <monkey:patch
+      class="bika.lims.content.analysis.Analysis"
+      original="getReferenceMethod"
+      ignoreOriginal="True"
+      replacement=".analysis.getReferenceMethod" />
+
+  <monkey:patch
+      class="bika.lims.content.analysis.Analysis"
+      original="setReferenceMethod"
+      ignoreOriginal="True"
+      replacement=".analysis.setReferenceMethod" />
+
+</configure>

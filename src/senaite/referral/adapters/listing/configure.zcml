@@ -1,0 +1,26 @@
+<configure
+  xmlns="http://namespaces.zope.org/zope"
+  i18n_domain="senaite.referral">
+
+  <!-- Samples listing with additional filters and columns -->
+  <subscriber
+      for="bika.lims.browser.analysisrequest.AnalysisRequestsView
+           *"
+      provides="senaite.app.listing.interfaces.IListingViewAdapter"
+      factory=".samples.SamplesListingViewAdapter" />
+
+  <!-- Analyses listing -->
+  <subscriber
+      for="bika.lims.browser.analyses.view.AnalysesView
+           bika.lims.interfaces.IAnalysisRequest"
+      provides="senaite.app.listing.interfaces.IListingViewAdapter"
+      factory=".analyses.SampleAnalysesListingAdapter" />
+
+  <!-- Manage Analyses listing -->
+  <subscriber
+      for="bika.lims.browser.analysisrequest.AnalysisRequestAnalysesView
+           bika.lims.interfaces.IAnalysisRequest"
+      provides="senaite.app.listing.interfaces.IListingViewAdapter"
+      factory=".analyses.SampleManageAnalysesListingAdapter" />
+
+</configure>

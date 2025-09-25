@@ -1,0 +1,63 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser"
+    xmlns:plone="http://namespaces.plone.org/plone"
+    i18n_domain="senaite.referral">
+
+  <!-- Static directory for js, css and image resources -->
+  <plone:static
+      name="senaite.referral.static"
+      directory="static"
+      type="plone" />
+
+  <!-- Package includes -->
+  <include package=".externallaboratory"/>
+  <include package=".inbound"/>
+  <include package=".outbound"/>
+  <include package=".shipmentfolder"/>
+  <include package=".theme"/>
+  <include package=".viewlets"/>
+  <include package=".workflow"/>
+  <include package=".form"/>
+
+  <!-- Referral Control panel -->
+  <browser:page
+      name="referral-controlpanel"
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      class=".controlpanel.ReferralControlPanelView"
+      permission="senaite.core.permissions.ManageBika"
+      layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
+
+  <!-- External Laboratories folder view -->
+  <browser:page
+      name="view"
+      for="senaite.referral.interfaces.IExternalLaboratoryFolder"
+      class=".externallaboratoryfolder.ExternalLaboratoryFolderView"
+      permission="zope2.View"
+      layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
+
+  <!-- Shipment of samples (Outbound Shipment creation/assignment) -->
+  <browser:page
+      for="*"
+      name="referral_ship_samples"
+      class=".ship_samples.ShipSamplesView"
+      permission="senaite.core.permissions.ManageAnalysisRequests"
+      layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
+
+  <!-- Retry notification -->
+  <browser:page
+      for="*"
+      name="retry_notification"
+      class=".retry_notification.RetryNotificationView"
+      permission="senaite.core.permissions.ManageBika"
+      layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
+
+  <!-- Shipment manifest -->
+  <browser:page
+      for="senaite.referral.interfaces.IOutboundSampleShipment"
+      name="shipment_manifest"
+      class=".shipment_manifest.ShipmentManifestView"
+      permission="zope2.View"
+      layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
+
+</configure>
