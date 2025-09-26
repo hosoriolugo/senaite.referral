@@ -19,7 +19,7 @@
 # Some rights reserved, see README and LICENSE.
 
 from collections import OrderedDict
-import copy
+import copy  # noqa
 
 from bika.lims.api import UID_CATALOG
 from plone.registry.interfaces import IRegistry
@@ -236,11 +236,12 @@ def setup_handler(context):
     # 2) Tipos visibles en navegación
     setup_navigation_types(portal)
 
-    # 3) Workflows (dejamos tal cual para minimizar cambios)
+    # 3) Workflows (aplicar cambios base)
     setup_workflows(portal)
 
-    # 4) Arreglo seguro: fijar títulos de acciones del FTI ExternalLaboratory
-    _fix_external_lab_actions(portal)
+    # 4) Normalizar labels pendientes: acciones y workflows
+    _fix_action_titles_everywhere(portal)
+    _fix_workflow_labels(portal)
 
     # 5) ID formatting
     setup_id_formatting(portal)
@@ -320,7 +321,7 @@ def setup_navigation_types(portal):
 
 def setup_workflows(portal):
     """Aplicamos los cambios de workflow tal cual (sin localizar aquí para
-    minimizar el impacto). Si luego quieres localizarlos también, lo hacemos aparte.
+    minimizar el impacto). Luego normalizamos con _fix_workflow_labels.
     """
     logger.info("Setup workflows ...")
     for wf_id, settings in WORKFLOWS_TO_UPDATE.items():
@@ -328,41 +329,226 @@ def setup_workflows(portal):
     logger.info("Setup workflows [DONE]")
 
 
-def _fix_external_lab_actions(portal):
-    """Traduce títulos de acciones 'inbound_shipments'/'outbound_shipments'
-    del FTI ExternalLaboratory. Se ejecuta en setup_handler (sitio ya listo).
-    """
+# --- Fijación de títulos en FTIs y portal_actions -----------------------------
+
+_ACTION_ID_TO_MSGID = {
+    # ids comunes a traducir
+    'inbound_shipments':  u'Inbound Shipments',
+    'outbound_shipments': u'Outbound Shipments',
+    'samples':            u'Samples',
+    'comments':           u'Comments',
+}
+
+def _fix_action_titles_everywhere(portal):
+    """Traduce y persiste títulos de acciones tanto en FTIs como en portal_actions."""
+    _fix_fti_action_titles(portal)
+    _fix_portal_actions_titles(portal)
+
+def _fix_fti_action_titles(portal):
     try:
         ptool = portal.portal_types
     except Exception:
         return
-    fti_id = 'ExternalLaboratory'
-    if fti_id not in ptool.objectIds():
+
+    for fti_id in ptool.objectIds():
+        fti = ptool[fti_id]
+        actions = list(getattr(fti, '_actions', []) or [])
+        changed = False
+        for a in actions:
+            aid = getattr(a, 'id', None)
+            if not aid:
+                continue
+            if aid in _ACTION_ID_TO_MSGID:
+                title_tx = _tx(portal, _ACTION_ID_TO_MSGID[aid])
+                if getattr(a, 'title', None) != title_tx:
+                    a.title = title_tx
+                    changed = True
+        if changed:
+            try:
+                fti._p_changed = True
+            except Exception:
+                pass
+
+def _fix_portal_actions_titles(portal):
+    try:
+        atool = portal.portal_actions
+    except Exception:
         return
 
-    fti = ptool[fti_id]
-    actions = list(getattr(fti, '_actions', []) or [])
-    changed = False
+    for cat_id in atool.objectIds():
+        cat = getattr(atool, cat_id, None)
+        if not cat:
+            continue
+        changed = False
+        for act in list(getattr(cat, 'objectValues', lambda: [])() or []):
+            aid = getattr(act, 'id', None)
+            if not aid:
+                continue
+            if aid in _ACTION_ID_TO_MSGID:
+                title_tx = _tx(portal, _ACTION_ID_TO_MSGID[aid])
+                if getattr(act, 'title', None) != title_tx:
+                    try:
+                        act.title = title_tx
+                        changed = True
+                    except Exception:
+                        pass
+        if changed:
+            try:
+                cat._p_changed = True
+            except Exception:
+                pass
 
-    for a in actions:
-        aid = getattr(a, 'id', None)
-        if aid == 'inbound_shipments':
-            title_tx = _tx(portal, u"Inbound Shipments")
-            if getattr(a, 'title', None) != title_tx:
-                a.title = title_tx
-                changed = True
-        elif aid == 'outbound_shipments':
-            title_tx = _tx(portal, u"Outbound Shipments")
-            if getattr(a, 'title', None) != title_tx:
-                a.title = title_tx
-                changed = True
 
-    if changed:
+# --- Normalización de labels de workflow -------------------------------------
+
+def _fix_workflow_labels(portal):
+    """Normaliza títulos/descr. de estados y títulos/acciones de transiciones
+    en SAMPLE_WORKFLOW y ANALYSIS_WORKFLOW. Solo reescribe si están vacíos
+    o iguales al msgid en inglés (no pisa cambios manuales)."""
+
+    def _maybe_set(obj, attr, new_value, msgid):
+        old = getattr(obj, attr, u'') or u''
         try:
-            fti._p_changed = True
+            old_cmp = old.strip().lower()
         except Exception:
-            pass
+            old_cmp = u''
+        if (not old) or (old_cmp == msgid.lower()):
+            if old != new_value:
+                setattr(obj, attr, new_value)
+                return True
+        return False
 
+    wf_tool = getattr(portal, 'portal_workflow', None)
+    if not wf_tool:
+        return
+
+    # === SAMPLE_WORKFLOW ===
+    wf = wf_tool.getWorkflowById(SAMPLE_WORKFLOW)
+    if wf:
+        changed = False
+        # Estados
+        state_map = {
+            'shipped': {
+                'title':       (u'Referred', _tx(portal, u'Referred') or u'Remitida'),
+                'description': (u'Sample is referred to reference laboratory',
+                                _tx(portal, u'Sample is referred to reference laboratory') or
+                                u'La muestra ha sido remitida al laboratorio de referencia'),
+            },
+            'received_at_reference': {
+                'title':       (u'Received at reference lab',
+                                _tx(portal, u'Received at reference lab') or
+                                u'Recibida en el laboratorio de referencia'),
+                'description': (u'Sample received at reference laboratory',
+                                _tx(portal, u'Sample received at reference laboratory') or
+                                u'Muestra recibida en el laboratorio de referencia'),
+            },
+            'rejected_at_reference': {
+                'title':       (u'Rejected at reference lab',
+                                _tx(portal, u'Rejected at reference lab') or
+                                u'Rechazada en el laboratorio de referencia'),
+                'description': (u'Sample rejected at reference laboratory',
+                                _tx(portal, u'Sample rejected at reference laboratory') or
+                                u'Muestra rechazada en el laboratorio de referencia'),
+            },
+            'invalidated_at_reference': {
+                'title':       (u'Invalidated at reference lab',
+                                _tx(portal, u'Invalidated at reference lab') or
+                                u'Invalidada en el laboratorio de referencia'),
+                'description': (u'Sample invalidated at reference laboratory',
+                                _tx(portal, u'Sample invalidated at reference laboratory') or
+                                u'Muestra invalidada en el laboratorio de referencia'),
+            },
+        }
+        for sid, defs in state_map.items():
+            st = wf.states.get(sid)
+            if not st:
+                continue
+            for attr, (msgid, es_text) in defs.items():
+                changed |= _maybe_set(st, attr, es_text, msgid)
+
+        # Transiciones (title y nombre visible / actbox_name)
+        trans_map = {
+            'ship': (
+                (u'Add to shipment',  _tx(portal, u'Add to shipment')  or u'Agregar al envío', 'title'),
+                (u'Add to shipment',  _tx(portal, u'Add to shipment')  or u'Agregar al envío', 'actbox_name'),
+            ),
+            'receive_at_reference': (
+                (u'Receive sample (at reference lab)',
+                 _tx(portal, u'Receive sample (at reference lab)') or
+                 u'Recibir muestra (en lab. de referencia)', 'title'),
+                (u'Received at reference lab',
+                 _tx(portal, u'Received at reference lab') or
+                 u'Recibida en el lab. de referencia', 'actbox_name'),
+            ),
+            'reject_at_reference': (
+                (u'Reject sample (at reference lab)',
+                 _tx(portal, u'Reject sample (at reference lab)') or
+                 u'Rechazar muestra (en lab. de referencia)', 'title'),
+                (u'Reject at reference lab',
+                 _tx(portal, u'Reject at reference lab') or
+                 u'Rechazar en lab. de referencia', 'actbox_name'),
+            ),
+            'invalidate_at_reference': (
+                (u'Invalidate sample (at reference lab)',
+                 _tx(portal, u'Invalidate sample (at reference lab)') or
+                 u'Invalidar muestra (en lab. de referencia)', 'title'),
+                (u'Invalidate at reference lab',
+                 _tx(portal, u'Invalidate at reference lab') or
+                 u'Invalidar en el lab. de referencia', 'actbox_name'),
+            ),
+            'recall_from_shipment': (
+                (u'Recall from shipment',
+                 _tx(portal, u'Recall from shipment') or
+                 u'Retirar del envío', 'title'),
+                (u'Recall from shipment',
+                 _tx(portal, u'Recall from shipment') or
+                 u'Retirar del envío', 'actbox_name'),
+            ),
+        }
+        for tid, triples in trans_map.items():
+            tr = wf.transitions.get(tid)
+            if not tr:
+                continue
+            for msgid, es_text, attr in triples:
+                changed |= _maybe_set(tr, attr, es_text, msgid)
+
+        if changed:
+            try:
+                wf._p_changed = True
+            except Exception:
+                pass
+
+    # === ANALYSIS_WORKFLOW ===
+    wf = wf_tool.getWorkflowById(ANALYSIS_WORKFLOW)
+    if wf:
+        changed = False
+        st = wf.states.get('referred')
+        if st:
+            changed |= _maybe_set(st, 'title',
+                                  _tx(portal, u'Referred') or u'Remitido',
+                                  u'Referred')
+            changed |= _maybe_set(st, 'description',
+                                  _tx(portal, u'Analysis is referred to reference laboratory') or
+                                  u'Análisis remitido al laboratorio de referencia',
+                                  u'Analysis is referred to reference laboratory')
+        tr = wf.transitions.get('refer')
+        if tr:
+            changed |= _maybe_set(tr, 'title',
+                                  _tx(portal, u'Refer the analysis to a reference laboratory') or
+                                  u'Remitir el análisis a un laboratorio de referencia',
+                                  u'Refer the analysis to a reference laboratory')
+            changed |= _maybe_set(tr, 'actbox_name',
+                                  _tx(portal, u'Refer to reference laboratory') or
+                                  u'Remitir a laboratorio de referencia',
+                                  u'Refer to reference laboratory')
+        if changed:
+            try:
+                wf._p_changed = True
+            except Exception:
+                pass
+
+
+# --- ID formatting / catálogos / ajax ----------------------------------------
 
 def setup_id_formatting(portal, format_definition=None):
     if not format_definition:
