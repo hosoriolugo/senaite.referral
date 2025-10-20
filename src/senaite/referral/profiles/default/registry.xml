@@ -2,8 +2,20 @@
   xmlns:i18n="http://xml.zope.org/namespaces/i18n"
   i18n:domain="senaite.referral">
 
+  <!-- Tu bloque existente -->
   <records
     interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
     prefix="senaite.referral" />
+
+  <!-- NUEVO: agrega el CSS al bundle plone-legacy -->
+  <records
+    interface="Products.CMFPlone.interfaces.resourcebundles.IResourceBundles"
+    prefix="plone.bundles/plone-legacy">
+    <value key="resources">
+      <!-- Ajusta la ruta si usaste otro 'name' en browser:resourceDirectory -->
+      <element>++plone++senaite.referral.static/infolabsa.css</element>
+    </value>
+    <value key="compile">False</value>
+  </records>
 
 </registry>
