@@ -56,7 +56,7 @@ def _analysis_is_oof(a):
     1) Intenta usar flags/etiquetas ya existentes (reusa tu lógica actual).
     2) Si no hay flag, compara valor vs ref_min/ref_max si existen.
     """
-    # 1) Flags existentes (ajusta nombres si en tu instancia usas otros)
+    # 1) Flags existentes
     for attr in ("getResultFlag", "getResultFlags", "result_flag"):
         if hasattr(a, attr):
             try:
@@ -172,11 +172,10 @@ class SamplesListingViewAdapter(object):
                     break
 
             if any_oof:
-                # El listado utiliza 'class'/'state_class' para la <tr>
-                row_cls = (item.get("class") or u"") + u" row-flag-alert"
-                item["class"] = row_cls.strip()
-                st_cls = (item.get("state_class") or u"") + u" row-flag-alert"
-                item["state_class"] = st_cls.strip()
+                # Añadir clase a la fila; cubrir distintas claves usadas por el renderer
+                for key in ("class", "state_class", "row_class", "review_state_class"):
+                    cur = item.get(key) or u""
+                    item[key] = (cur + u" row-flag-alert").strip()
         except Exception:
             # Nunca romper el listado por un fallo de chequeo
             pass
