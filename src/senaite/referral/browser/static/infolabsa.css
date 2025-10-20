@@ -1,0 +1,8 @@
+/* Sombreado rojo tenue permanente para filas con analitos fuera de rango */
+table.listing tbody tr.row-flag-alert,
+table.table   tbody tr.row-flag-alert {
+  background-color: #fff1f0 !important;
+}
+table.listing tbody tr.row-flag-alert td {
+  border-top-color: #ffd1ce !important;
+}
