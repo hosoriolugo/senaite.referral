@@ -1,8 +1,25 @@
 /* Sombreado rojo tenue permanente para filas con analitos fuera de rango */
+
+/* Cubrir los tipos de tablas usados por SENAITE */
 table.listing tbody tr.row-flag-alert,
-table.table   tbody tr.row-flag-alert {
-  background-color: #fff1f0 !important;
+table.listing-table tbody tr.row-flag-alert,
+table#listing tbody tr.row-flag-alert,
+table.table tbody tr.row-flag-alert {
+  background-color: #fff1f0 !important; /* rojo muy suave */
 }
-table.listing tbody tr.row-flag-alert td {
+
+/* Pintar también las celdas (algunos temas aplican fondo en <td>, no en <tr>) */
+table.listing tbody tr.row-flag-alert > td,
+table.listing-table tbody tr.row-flag-alert > td,
+table#listing tbody tr.row-flag-alert > td,
+table.table tbody tr.row-flag-alert > td {
+  background-color: #fff1f0 !important;
+  border-top-color: #ffd1ce !important; /* sutil separación */
+}
+
+/* Soporte alterno: si el adapter añade data-row-alert="1" */
+tr[data-row-alert="1"],
+tr[data-row-alert="1"] > td {
+  background-color: #fff1f0 !important;
   border-top-color: #ffd1ce !important;
 }
