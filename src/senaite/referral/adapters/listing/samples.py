@@ -31,6 +31,79 @@ from zope.interface import implementer
 from bika.lims import api
 from bika.lims.utils import get_link_for
 
+# === INFOLABSA: añadido para detectar analitos fuera de rango y marcar la fila ===
+from Products.CMFCore.utils import getToolByName
+
+
+def _to_num(x):
+    """Convierte a float soportando None, '' y comas decimales. Py2.7-safe."""
+    try:
+        if x in (None, u"", ""):
+            return None
+        try:
+            num_types = (int, long, float)  # noqa: F821 en Py3, pero aquí es Py2
+        except NameError:  # por si acaso
+            num_types = (int, float)
+        if isinstance(x, num_types):
+            return float(x)
+        return float(unicode(x).replace(",", "."))
+    except Exception:
+        return None
+
+
+def _analysis_is_oof(a):
+    """Devuelve True si el Analysis 'a' está fuera de rango.
+    1) Intenta usar flags/etiquetas ya existentes (reusa tu lógica actual).
+    2) Si no hay flag, compara valor vs ref_min/ref_max si existen.
+    """
+    # 1) Flags existentes (ajusta nombres si en tu instancia usas otros)
+    for attr in ("getResultFlag", "getResultFlags", "result_flag"):
+        if hasattr(a, attr):
+            try:
+                flag = getattr(a, attr)()
+            except TypeError:
+                flag = getattr(a, attr)
+            txt = unicode(flag or u"").lower()
+            if any(k in txt for k in (u"out", u"rango", u"range", u"crític", u"critic", u"alert")):
+                return True
+
+    # 2) Fallback numérico simple con min/max si están disponibles
+    val = None
+    for attr in ("getResult", "Result", "getResultValue"):
+        if hasattr(a, attr):
+            try:
+                val = getattr(a, attr)()
+            except TypeError:
+                val = getattr(a, attr)
+            break
+    v = _to_num(val)
+
+    lo = None
+    hi = None
+    for attr in ("getReferenceMinimum", "getMin", "getLower"):
+        if hasattr(a, attr):
+            try:
+                lo = getattr(a, attr)()
+            except TypeError:
+                lo = getattr(a, attr)
+            lo = _to_num(lo)
+            break
+    for attr in ("getReferenceMaximum", "getMax", "getUpper"):
+        if hasattr(a, attr):
+            try:
+                hi = getattr(a, attr)()
+            except TypeError:
+                hi = getattr(a, attr)
+            hi = _to_num(hi)
+            break
+
+    if v is not None and (lo is not None or hi is not None):
+        if (lo is not None and v < lo) or (hi is not None and v > hi):
+            return True
+
+    return False
+# === /INFOLABSA ===
+
 
 @adapter(IListingView)
 @implementer(IListingViewAdapter)
@@ -80,6 +153,34 @@ class SamplesListingViewAdapter(object):
             after = item["after"].get("getId", "")
             ico = self.get_glyphicon("alert", title=msg, color="red")
             item["after"]["getId"] = " ".join(filter(None, [after, ico]))
+
+        # === INFOLABSA: sombrear fila si existe al menos un analito fuera de rango ===
+        try:
+            pc = getToolByName(self.context, "portal_catalog")
+            uid = api.get_uid(obj)
+
+            # Analyses del AR: getRequestUID es habitual; algunos usan getAnalysisRequestUID
+            brains = pc(portal_type="Analysis", getRequestUID=uid)
+            if not brains:
+                brains = pc(portal_type="Analysis", getAnalysisRequestUID=uid)
+
+            any_oof = False
+            for b in brains:
+                a = b.getObject()  # rendimiento: OK para tamaños de lista habituales
+                if _analysis_is_oof(a):
+                    any_oof = True
+                    break
+
+            if any_oof:
+                # El listado utiliza 'class'/'state_class' para la <tr>
+                row_cls = (item.get("class") or u"") + u" row-flag-alert"
+                item["class"] = row_cls.strip()
+                st_cls = (item.get("state_class") or u"") + u" row-flag-alert"
+                item["state_class"] = st_cls.strip()
+        except Exception:
+            # Nunca romper el listado por un fallo de chequeo
+            pass
+        # === /INFOLABSA ===
 
         return item
 
