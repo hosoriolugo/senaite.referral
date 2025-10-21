@@ -46,16 +46,13 @@ def _to_num(x):
             num_types = (int, float)
         if isinstance(x, num_types):
             return float(x)
-        return float(unicode(x).replace(",", "."))
+        return float(unicode(x).replace(",", "."))  # noqa
     except Exception:
         return None
 
 
 def _analysis_is_oof(a):
-    """Devuelve True si el Analysis 'a' está fuera de rango.
-    1) Intenta usar flags/etiquetas ya existentes (reusa tu lógica actual).
-    2) Si no hay flag, compara valor vs ref_min/ref_max si existen.
-    """
+    """True si el Analysis está fuera de rango (flags o min/max)."""
     # 1) Flags existentes
     for attr in ("getResultFlag", "getResultFlags", "result_flag"):
         if hasattr(a, attr):
@@ -63,7 +60,7 @@ def _analysis_is_oof(a):
                 flag = getattr(a, attr)()
             except TypeError:
                 flag = getattr(a, attr)
-            txt = unicode(flag or u"").lower()
+            txt = unicode(flag or u"").lower()  # noqa
             if any(k in txt for k in (u"out", u"rango", u"range", u"crític", u"critic", u"alert")):
                 return True
 
@@ -129,6 +126,7 @@ class SamplesListingViewAdapter(object):
         if outbound:
             link = get_link_for(outbound)
             ico = self.get_glyphicon("export")
+            item.setdefault("replace", {})
             item["replace"]["Shipment"] = "{}{}".format(ico, link)
             outbound = api.get_title(outbound)
 
@@ -140,7 +138,9 @@ class SamplesListingViewAdapter(object):
             ico = self.get_glyphicon("import")
             val = "{}{}".format(ico, link)
             if outbound:
-                val = "&nbsp;|&nbsp;".join([val, item["replace"]["Shipment"]])
+                prev = item.get("replace", {}).get("Shipment", "")
+                val = "&nbsp;|&nbsp;".join(filter(None, [val, prev]))
+            item.setdefault("replace", {})
             item["replace"]["Shipment"] = val
             inbound = api.get_title(inbound)
 
@@ -150,8 +150,9 @@ class SamplesListingViewAdapter(object):
         # Show an alert if the sample has been rejected at reference lab
         if api.get_review_status(obj) == "rejected_at_reference":
             msg = _("Sample rejected at reference laboratory")
-            after = item["after"].get("getId", "")
+            after = item.get("after", {}).get("getId", "")
             ico = self.get_glyphicon("alert", title=msg, color="red")
+            item.setdefault("after", {})
             item["after"]["getId"] = " ".join(filter(None, [after, ico]))
 
         # === INFOLABSA: sombrear fila si existe al menos un analito fuera de rango ===
@@ -159,23 +160,29 @@ class SamplesListingViewAdapter(object):
             pc = getToolByName(self.context, "portal_catalog")
             uid = api.get_uid(obj)
 
-            # Analyses del AR: getRequestUID es habitual; algunos usan getAnalysisRequestUID
+            # Analyses del AR
             brains = pc(portal_type="Analysis", getRequestUID=uid)
             if not brains:
                 brains = pc(portal_type="Analysis", getAnalysisRequestUID=uid)
 
             any_oof = False
             for b in brains:
-                a = b.getObject()  # rendimiento: OK para tamaños de lista habituales
+                a = b.getObject()  # rendimiento ok para listados
                 if _analysis_is_oof(a):
                     any_oof = True
                     break
 
             if any_oof:
-                # Añadir clase a la fila; cubrir distintas claves usadas por el renderer
-                for key in ("class", "state_class", "row_class", "review_state_class"):
+                # 1) Intenta añadir clase a la fila (por compatibilidad con varios renderers)
+                for key in ("class", "state_class", "row_class", "review_state_class", "table_row_class"):
                     cur = item.get(key) or u""
                     item[key] = (cur + u" row-flag-alert").strip()
+
+                # 2) Inyecta SIEMPRE un marcador oculto en una celda, para que el JS lo detecte
+                item.setdefault("after", {})
+                prev = item["after"].get("getId", "")
+                marker = u'<span class="oob-flag" data-oor="1"></span>'
+                item["after"]["getId"] = u" ".join(filter(None, [prev, marker]))
         except Exception:
             # Nunca romper el listado por un fallo de chequeo
             pass
