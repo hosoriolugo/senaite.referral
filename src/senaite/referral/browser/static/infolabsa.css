@@ -23,3 +23,49 @@ tr[data-row-alert="1"] > td {
   background-color: #fff1f0 !important;
   border-top-color: #ffd1ce !important;
 }
+
+/* ======== AJUSTES DE COMPATIBILIDAD (añadidos) ======== */
+
+/* DataTables/Listing de SENAITE: asegurar el mismo fondo */
+table.dataTable tbody tr.row-flag-alert,
+table.dataTable tbody tr.row-flag-alert > td {
+  background-color: #fff1f0 !important;
+  border-top-color: #ffd1ce !important;
+}
+
+/* Zebra (.table-striped) y hover (.table-hover): mantener la alerta visible */
+table.table-striped tbody tr.row-flag-alert,
+table.table-hover tbody tr.row-flag-alert:hover,
+table.table-hover tbody tr.row-flag-alert:hover > td {
+  background-color: #fff1f0 !important;
+}
+
+/* Cuando hay selección de fila (algunos temas usan .selected) mantener color y resaltar borde */
+tbody tr.row-flag-alert.selected > td,
+tbody tr.row-flag-alert.is-selected > td {
+  background-color: #ffe9e7 !important; /* un pelín más marcado en selección */
+  box-shadow: inset 0 0 0 2px #ffb8b2;   /* contorno suave para indicar selección */
+}
+
+/* Acento sutil para visibilidad (borde interno en la primera celda) */
+tbody tr.row-flag-alert > td:first-child,
+tbody tr[data-row-alert="1"] > td:first-child {
+  box-shadow: inset 4px 0 0 #ffb3ad; /* línea vertical suave */
+}
+
+/* Si el tema pinta hover por <td>, forzamos coherencia */
+tbody tr.row-flag-alert > td:hover {
+  background-color: #ffe9e7 !important;
+}
+
+/* Impresión: conservar el marcado en reportes impresos */
+@media print {
+  tr.row-flag-alert,
+  tr.row-flag-alert > td,
+  tr[data-row-alert="1"],
+  tr[data-row-alert="1"] > td {
+    background-color: #fff1f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
