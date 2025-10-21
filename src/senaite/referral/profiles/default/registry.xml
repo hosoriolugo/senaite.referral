@@ -2,84 +2,30 @@
 <registry xmlns:i18n="http://xml.zope.org/namespaces/i18n"
           i18n:domain="senaite.referral">
 
-  <!-- ================= CONTROL PANEL ================= -->
+  <!-- Control Panel (sin cambios) -->
   <records
       interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
       prefix="senaite.referral" />
 
-  <!-- ================= RESOURCES =================
-       Declarados con <record> + <field> para evitar errores de tipo.
-       Cada campo es un Tuple(TextLine), como exige IResourceRegistry.
-  -->
-
-  <!-- plone.resources/infolabsa-css -->
-  <!-- CSS -->
-  <record name="plone.resources/infolabsa-css.css">
-    <field type="plone.registry.field.Tuple">
-      <title>infolabsa-css CSS</title>
-      <value_type type="plone.registry.field.TextLine" />
-    </field>
-    <value>
+  <!-- ============ RESOURCE: SOLO CSS (sin JS) ============ -->
+  <records
+      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
+      prefix="plone.resources/infolabsa-css"
+      purge="false">
+    <value key="css">
       <element>++plone++senaite.referral.static/infolabsa.css</element>
     </value>
-  </record>
-  <!-- JS (vacío) -->
-  <record name="plone.resources/infolabsa-css.js">
-    <field type="plone.registry.field.Tuple">
-      <title>infolabsa-css JS</title>
-      <value_type type="plone.registry.field.TextLine" />
-    </field>
-    <value />
-  </record>
-  <!-- deps (vacío) -->
-  <record name="plone.resources/infolabsa-css.deps">
-    <field type="plone.registry.field.Tuple">
-      <title>infolabsa-css deps</title>
-      <value_type type="plone.registry.field.TextLine" />
-    </field>
-    <value />
-  </record>
+    <!-- deps vacío es válido -->
+    <value key="deps" />
+  </records>
 
-  <!-- plone.resources/infolabsa-assets -->
-  <!-- CSS -->
-  <record name="plone.resources/infolabsa-assets.css">
-    <field type="plone.registry.field.Tuple">
-      <title>infolabsa-assets CSS</title>
-      <value_type type="plone.registry.field.TextLine" />
-    </field>
-    <value>
-      <element>++plone++senaite.referral.static/infolabsa.css</element>
-    </value>
-  </record>
-  <!-- JS -->
-  <record name="plone.resources/infolabsa-assets.js">
-    <field type="plone.registry.field.Tuple">
-      <title>infolabsa-assets JS</title>
-      <value_type type="plone.registry.field.TextLine" />
-    </field>
-    <value>
-      <element>++plone++senaite.referral.static/infolabsa.js</element>
-    </value>
-  </record>
-  <!-- deps (vacío) -->
-  <record name="plone.resources/infolabsa-assets.deps">
-    <field type="plone.registry.field.Tuple">
-      <title>infolabsa-assets deps</title>
-      <value_type type="plone.registry.field.TextLine" />
-    </field>
-    <value />
-  </record>
-
-  <!-- ================= BUNDLES =================
-       Aquí sí usamos la interfaz IBundleRegistry (válido en Plone 5).
-  -->
+  <!-- ============ BUNDLE: SENAITE.CORE ============ -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
       prefix="plone.bundles/senaite.core"
       purge="false">
     <value key="resources" purge="false">
       <element>infolabsa-css</element>
-      <element>infolabsa-assets</element>
     </value>
     <value key="enabled">True</value>
     <value key="compile">False</value>
