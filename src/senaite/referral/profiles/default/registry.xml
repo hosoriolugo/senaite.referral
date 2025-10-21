@@ -2,66 +2,67 @@
 <registry xmlns:i18n="http://xml.zope.org/namespaces/i18n"
           i18n:domain="senaite.referral">
 
-  <!-- Control Panel (sin cambios) -->
+  <!-- ================= CONTROL PANEL (sin cambios) ================= -->
   <records
       interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
       prefix="senaite.referral" />
 
-  <!-- ========= RESOURCES ========= -->
-
-  <!-- Recurso SOLO CSS -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
-      prefix="plone.resources/infolabsa-css"
-      purge="false">
-    <value key="css" purge="false">
+  <!-- ================= RESOURCES: infolabsa-css ================= -->
+  <!-- Solo CSS (no JS) -->
+  <record name="plone.resources/infolabsa-css.css">
+    <value>
       <element>++plone++senaite.referral.static/infolabsa.css</element>
     </value>
-    <value key="js" />
-    <!-- OJO: usar 'deps' (no 'dependencies') -->
-    <value key="deps" />
-  </records>
+  </record>
+  <!-- deps vacío (opcional) -->
+  <record name="plone.resources/infolabsa-css.deps">
+    <value />
+  </record>
 
-  <!-- Recurso combinado CSS + JS -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
-      prefix="plone.resources/infolabsa-assets"
-      purge="false">
-    <value key="css" purge="false">
+  <!-- ================= RESOURCES: infolabsa-assets ================= -->
+  <!-- CSS -->
+  <record name="plone.resources/infolabsa-assets.css">
+    <value>
       <element>++plone++senaite.referral.static/infolabsa.css</element>
     </value>
-    <value key="js" purge="false">
+  </record>
+  <!-- JS -->
+  <record name="plone.resources/infolabsa-assets.js">
+    <value>
       <element>++plone++senaite.referral.static/infolabsa.js</element>
     </value>
-    <value key="deps" />
-  </records>
+  </record>
+  <!-- deps vacío (opcional) -->
+  <record name="plone.resources/infolabsa-assets.deps">
+    <value />
+  </record>
 
-  <!-- ========= BUNDLES ========= -->
-
-  <!-- Agregar recursos al bundle plone-legacy (opcional) -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
-      prefix="plone.bundles/plone-legacy"
-      purge="false">
-    <value key="resources" purge="false">
+  <!-- ================= BUNDLE: plone-legacy (opcional) ================= -->
+  <record name="plone.bundles/plone-legacy.resources">
+    <value purge="false">
       <element>infolabsa-css</element>
       <element>infolabsa-assets</element>
     </value>
-    <value key="enabled">True</value>
-    <value key="compile">False</value>
-  </records>
+  </record>
+  <record name="plone.bundles/plone-legacy.enabled">
+    <value>True</value>
+  </record>
+  <record name="plone.bundles/plone-legacy.compile">
+    <value>False</value>
+  </record>
 
-  <!-- Agregar también al bundle base de SENAITE -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
-      prefix="plone.bundles/senaite.core"
-      purge="false">
-    <value key="resources" purge="false">
+  <!-- ================= BUNDLE: senaite.core (recomendado) ================= -->
+  <record name="plone.bundles/senaite.core.resources">
+    <value purge="false">
       <element>infolabsa-css</element>
       <element>infolabsa-assets</element>
     </value>
-    <value key="enabled">True</value>
-    <value key="compile">False</value>
-  </records>
+  </record>
+  <record name="plone.bundles/senaite.core.enabled">
+    <value>True</value>
+  </record>
+  <record name="plone.bundles/senaite.core.compile">
+    <value>False</value>
+  </record>
 
 </registry>
