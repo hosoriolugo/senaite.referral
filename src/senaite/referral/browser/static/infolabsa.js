@@ -2,7 +2,6 @@
 (function () {
   "use strict";
 
-  // --- Configurable selectors: tablas de listados que usa SENAITE ---
   var TABLE_SELECTORS = [
     "table.listing",
     "table.listing-table",
@@ -10,7 +9,6 @@
     "table.table"
   ];
 
-  // Palabras clave/heurística para detectar OOR en la fila (por si existen)
   var OOR_TEXT_PATTERNS = [
     "fuera de rango",
     "out of range",
@@ -19,13 +17,11 @@
     "out-of-range"
   ];
 
-  // Iconos comunes en SENAITE que podrían usarse como alerta
   var OOR_ICON_HINTS = [
-    "exclamation", // exclamation_red.svg, etc.
-    "warning"      // warning.svg
+    "exclamation",
+    "warning"
   ];
 
-  // Debounce utilitario
   function debounce(fn, wait) {
     var t;
     return function () {
@@ -35,7 +31,6 @@
     };
   }
 
-  // Log controlado
   function log() {
     if (window && window.localStorage && localStorage.getItem("infolabsa.debug") === "1") {
       var args = Array.prototype.slice.call(arguments);
@@ -44,7 +39,6 @@
     }
   }
 
-  // Marca visual estándar (compatible con tu CSS)
   function markRow(tr) {
     if (!tr) return;
     if (!tr.classList.contains("row-flag-alert")) {
@@ -55,11 +49,9 @@
     }
   }
 
-  // Intenta obtener el UID de muestra de la fila (mejor esfuerzo, no intrusivo)
   function getSampleUIDFromRow(tr) {
     if (!tr) return null;
 
-    // 1) Atributos comunes que podrías añadir server-side
     var attrCandidates = [
       "data-uid",
       "data-sample-uid",
@@ -71,12 +63,10 @@
       if (v) return v;
     }
 
-    // 2) Enlaces en la primera columna que apunten a /clients/.../SAMPLEID
     try {
       var firstLink = tr.querySelector("td a[href]");
       if (firstLink) {
         var href = firstLink.getAttribute("href") || "";
-        // Extrae la última parte del path como posible id/uid
         var parts = href.split(/[\/#?]/).filter(Boolean);
         if (parts.length) {
           return parts[parts.length - 1];
@@ -87,21 +77,17 @@
     return null;
   }
 
-  // Heurística: detecta si la propia fila ya deja rastro de OOR en DOM
   function rowLooksOOR(tr) {
     if (!tr) return false;
 
-    // 1) Si el servidor ya dejó la marca, úsala sin más
     if (tr.classList.contains("row-flag-alert") || tr.getAttribute("data-row-alert") === "1") {
       return true;
     }
 
-    // 2) Atributos/celdas específicos
     if (tr.getAttribute("data-has-oor") === "1" || tr.querySelector('[data-oor="1"]')) {
       return true;
     }
 
-    // 3) Iconos típicos de alerta
     var imgs = tr.querySelectorAll("img, svg, use");
     for (var i = 0; i < imgs.length; i++) {
       var el = imgs[i];
@@ -112,7 +98,6 @@
       }
     }
 
-    // 4) Texto explícito en celdas
     var text = (tr.innerText || "").toLowerCase();
     if (OOR_TEXT_PATTERNS.some(function (k) { return text.indexOf(k) > -1; })) {
       return true;
@@ -121,8 +106,6 @@
     return false;
   }
 
-  // Si el proyecto provee un helper opcional para resolver OOR por lote:
-  // window.infolabsaGetOorSamples(sampleUIDs: string[]) => Promise<Set<string> | string[]>
   function hasHelper() {
     return typeof window.infolabsaGetOorSamples === "function";
   }
@@ -138,7 +121,6 @@
     }
   }
 
-  // Escanea una tabla y marca filas OOR
   function processTable(tbl) {
     if (!tbl) return;
 
@@ -148,7 +130,6 @@
     var rows = Array.prototype.slice.call(tbody.rows || []);
     if (rows.length === 0) return;
 
-    // 1) Si la fila ya implica OOR por DOM, marcamos directo (barato)
     rows.forEach(function (tr) {
       if (rowLooksOOR(tr)) {
         markRow(tr);
@@ -156,9 +137,8 @@
       }
     });
 
-    // 2) Si existe helper opcional y aún hay filas sin resolver, usamos el helper (batch)
     if (!hasHelper()) {
-      return; // sin helper, terminamos acá (ya marcamos lo que se pudo por DOM)
+      return;
     }
 
     var unresolved = rows.filter(function (tr) {
@@ -178,7 +158,6 @@
     var uids = Array.from(uidMap.keys());
     if (uids.length === 0) return;
 
-    // Consulta batch al helper
     window.infolabsaGetOorSamples(uids)
       .then(function (result) {
         var oorSet = toSet(result);
@@ -195,11 +174,9 @@
       })
       .catch(function (err) {
         log("helper error", err);
-        // Falla silenciosa: no marcamos nada extra
       });
   }
 
-  // Escanea todo el documento (todas las tablas de listados conocidas)
   var scanAll = debounce(function (root) {
     root = root || document;
     TABLE_SELECTORS.forEach(function (sel) {
@@ -208,7 +185,6 @@
     });
   }, 100);
 
-  // Observa cambios en DOM (recargas parciales, paginación, filtros…)
   var observer = new MutationObserver(function (mutations) {
     var shouldScan = false;
     for (var i = 0; i < mutations.length; i++) {
@@ -227,12 +203,9 @@
         childList: true,
         subtree: true
       });
-    } catch (e) {
-      // Nada
-    }
+    } catch (e) {}
   }
 
-  // Re-scan después de llamadas AJAX de los listados (Plone/SENAITE hace POST a /folderitems)
   function hookAjaxComplete() {
     if (!window.jQuery) return;
     try {
@@ -242,16 +215,16 @@
           if (/\/folderitems(\?|$)/.test(url)) {
             scanAll(document);
           }
-        } catch (e) {
-          // Nada
-        }
+        } catch (e) {}
       });
-    } catch (e) {
-      // Nada
-    }
+
+      // 🔹 EXTRA: algunos listados disparan este evento custom al terminar de renderizar
+      jQuery(document).on("listing:rendered", function () {
+        scanAll(document);
+      });
+    } catch (e) {}
   }
 
-  // Arranque
   function init() {
     scanAll(document);
     startObserver();
@@ -264,7 +237,6 @@
     document.addEventListener("DOMContentLoaded", init);
   }
 
-  // --- API mínima para depurar ---
   window.__infolabsa__ = {
     rescan: function () { scanAll(document); }
   };
