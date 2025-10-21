@@ -20,7 +20,7 @@
     <value key="export">False</value>
   </records>
 
-  <!-- NUEVO: Recurso combinado CSS+JS (necesario para añadir la clase en las filas) -->
+  <!-- Recurso combinado CSS+JS para la lógica de pintado -->
   <records
     interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
     prefix="plone.resources/infolabsa-assets"
@@ -35,7 +35,7 @@
     <value key="export">False</value>
   </records>
 
-  <!-- Añadir recursos por NOMBRE al bundle plone-legacy (sin purgar lo existente) -->
+  <!-- Añadir por nombre al bundle plone-legacy (sin purgar nada existente) -->
   <records
     interface="Products.CMFPlone.interfaces.resourcebundles.IResourceBundles"
     prefix="plone.bundles/plone-legacy"
@@ -47,7 +47,7 @@
     <value key="compile">False</value>
   </records>
 
-  <!-- Añadir también al bundle de SENAITE que siempre se carga -->
+  <!-- Añadir también al bundle que SENAITE siempre carga -->
   <records
     interface="Products.CMFPlone.interfaces.resourcebundles.IResourceBundles"
     prefix="plone.bundles/senaite.core"
