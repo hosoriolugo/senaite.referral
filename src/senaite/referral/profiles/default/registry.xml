@@ -1,61 +1,66 @@
-<registry
-  xmlns:i18n="http://xml.zope.org/namespaces/i18n"
-  i18n:domain="senaite.referral">
+<?xml version="1.0" encoding="utf-8"?>
+<registry xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+          i18n:domain="senaite.referral">
 
-  <!-- Tu bloque existente -->
+  <!-- Tu bloque existente (sin cambios) -->
   <records
-    interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
-    prefix="senaite.referral" />
+      interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
+      prefix="senaite.referral" />
 
-  <!-- Registro existente: SOLO CSS (lo conservamos) -->
+  <!-- Recurso SOLO CSS -->
   <records
-    interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
-    prefix="plone.resources/infolabsa-css"
-    purge="False">
-    <value key="css" purge="False">
+      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
+      prefix="plone.resources/infolabsa-css"
+      purge="false">
+    <value key="css" purge="false">
       <element>++plone++senaite.referral.static/infolabsa.css</element>
     </value>
     <value key="js" />
-    <value key="dependencies" />
+    <!-- OJO: usar 'deps' (no 'dependencies') -->
+    <value key="deps" />
     <value key="export">False</value>
+    <value key="compile">False</value>
   </records>
 
-  <!-- Recurso combinado CSS+JS para la lógica de pintado -->
+  <!-- Recurso combinado CSS + JS -->
   <records
-    interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
-    prefix="plone.resources/infolabsa-assets"
-    purge="False">
-    <value key="css" purge="False">
+      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
+      prefix="plone.resources/infolabsa-assets"
+      purge="false">
+    <value key="css" purge="false">
       <element>++plone++senaite.referral.static/infolabsa.css</element>
     </value>
-    <value key="js" purge="False">
+    <value key="js" purge="false">
       <element>++plone++senaite.referral.static/infolabsa.js</element>
     </value>
-    <value key="dependencies" />
+    <value key="deps" />
     <value key="export">False</value>
+    <value key="compile">False</value>
   </records>
 
-  <!-- Añadir por nombre al bundle plone-legacy (sin purgar nada existente) -->
+  <!-- Añadir recursos al bundle plone-legacy -->
   <records
-    interface="Products.CMFPlone.interfaces.resourcebundles.IResourceBundles"
-    prefix="plone.bundles/plone-legacy"
-    purge="False">
-    <value key="resources" purge="False">
+      interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
+      prefix="plone.bundles/plone-legacy"
+      purge="false">
+    <value key="resources" purge="false">
       <element>infolabsa-css</element>
       <element>infolabsa-assets</element>
     </value>
+    <value key="enabled">True</value>
     <value key="compile">False</value>
   </records>
 
   <!-- Añadir también al bundle que SENAITE siempre carga -->
   <records
-    interface="Products.CMFPlone.interfaces.resourcebundles.IResourceBundles"
-    prefix="plone.bundles/senaite.core"
-    purge="False">
-    <value key="resources" purge="False">
+      interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
+      prefix="plone.bundles/senaite.core"
+      purge="false">
+    <value key="resources" purge="false">
       <element>infolabsa-css</element>
       <element>infolabsa-assets</element>
     </value>
+    <value key="enabled">True</value>
     <value key="compile">False</value>
   </records>
 
