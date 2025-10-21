@@ -2,10 +2,12 @@
 <registry xmlns:i18n="http://xml.zope.org/namespaces/i18n"
           i18n:domain="senaite.referral">
 
-  <!-- Tu bloque existente (sin cambios) -->
+  <!-- Control Panel (sin cambios) -->
   <records
       interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
       prefix="senaite.referral" />
+
+  <!-- ========= RESOURCES ========= -->
 
   <!-- Recurso SOLO CSS -->
   <records
@@ -18,8 +20,6 @@
     <value key="js" />
     <!-- OJO: usar 'deps' (no 'dependencies') -->
     <value key="deps" />
-    <value key="export">False</value>
-    <value key="compile">False</value>
   </records>
 
   <!-- Recurso combinado CSS + JS -->
@@ -34,11 +34,11 @@
       <element>++plone++senaite.referral.static/infolabsa.js</element>
     </value>
     <value key="deps" />
-    <value key="export">False</value>
-    <value key="compile">False</value>
   </records>
 
-  <!-- Añadir recursos al bundle plone-legacy -->
+  <!-- ========= BUNDLES ========= -->
+
+  <!-- Agregar recursos al bundle plone-legacy (opcional) -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
       prefix="plone.bundles/plone-legacy"
@@ -51,7 +51,7 @@
     <value key="compile">False</value>
   </records>
 
-  <!-- Añadir también al bundle que SENAITE siempre carga -->
+  <!-- Agregar también al bundle base de SENAITE -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
       prefix="plone.bundles/senaite.core"
