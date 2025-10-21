@@ -7,19 +7,6 @@
     interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
     prefix="senaite.referral" />
 
-  <!-- Tu bloque existente (lo dejo intacto) -->
-  <!-- AJUSTE: agrega el CSS al bundle plone-legacy por NOMBRE de recurso -->
-  <records
-    interface="Products.CMFPlone.interfaces.resourcebundles.IResourceBundles"
-    prefix="plone.bundles/plone-legacy"
-    purge="False">
-    <value key="resources" purge="False">
-      <!-- Usar el nombre del recurso registrado (abajo) para que Plone lo resuelva -->
-      <element>infolabsa-css</element>
-    </value>
-    <value key="compile">False</value>
-  </records>
-
   <!-- Registro del recurso "infolabsa-css" -->
   <records
     interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
@@ -31,6 +18,18 @@
     <value key="js" />
     <value key="dependencies" />
     <value key="export">False</value>
+  </records>
+
+  <!-- AJUSTE: agrega el CSS al bundle plone-legacy por NOMBRE de recurso -->
+  <records
+    interface="Products.CMFPlone.interfaces.resourcebundles.IResourceBundles"
+    prefix="plone.bundles/plone-legacy"
+    purge="False">
+    <value key="resources" purge="False">
+      <!-- Usar el nombre del recurso registrado (arriba) para que Plone lo resuelva -->
+      <element>infolabsa-css</element>
+    </value>
+    <value key="compile">False</value>
   </records>
 
   <!-- Añadir el recurso al bundle que siempre cargas (senaite.core) -->
