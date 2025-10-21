@@ -7,7 +7,7 @@
     interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
     prefix="senaite.referral" />
 
-  <!-- Registro del recurso "infolabsa-css" -->
+  <!-- Registro existente: SOLO CSS (lo conservamos) -->
   <records
     interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
     prefix="plone.resources/infolabsa-css"
@@ -20,25 +20,41 @@
     <value key="export">False</value>
   </records>
 
-  <!-- AJUSTE: agrega el CSS al bundle plone-legacy por NOMBRE de recurso -->
+  <!-- NUEVO: Recurso combinado CSS+JS (necesario para añadir la clase en las filas) -->
+  <records
+    interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
+    prefix="plone.resources/infolabsa-assets"
+    purge="False">
+    <value key="css" purge="False">
+      <element>++plone++senaite.referral.static/infolabsa.css</element>
+    </value>
+    <value key="js" purge="False">
+      <element>++plone++senaite.referral.static/infolabsa.js</element>
+    </value>
+    <value key="dependencies" />
+    <value key="export">False</value>
+  </records>
+
+  <!-- Añadir recursos por NOMBRE al bundle plone-legacy (sin purgar lo existente) -->
   <records
     interface="Products.CMFPlone.interfaces.resourcebundles.IResourceBundles"
     prefix="plone.bundles/plone-legacy"
     purge="False">
     <value key="resources" purge="False">
-      <!-- Usar el nombre del recurso registrado (arriba) para que Plone lo resuelva -->
       <element>infolabsa-css</element>
+      <element>infolabsa-assets</element>
     </value>
     <value key="compile">False</value>
   </records>
 
-  <!-- Añadir el recurso al bundle que siempre cargas (senaite.core) -->
+  <!-- Añadir también al bundle de SENAITE que siempre se carga -->
   <records
     interface="Products.CMFPlone.interfaces.resourcebundles.IResourceBundles"
     prefix="plone.bundles/senaite.core"
     purge="False">
     <value key="resources" purge="False">
       <element>infolabsa-css</element>
+      <element>infolabsa-assets</element>
     </value>
     <value key="compile">False</value>
   </records>
