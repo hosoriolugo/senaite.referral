@@ -69,3 +69,6 @@ tbody tr.row-flag-alert > td:hover {
     print-color-adjust: exact;
   }
 }
+
+/* 🔹 Ocultar el marcador oculto que inyecta el adapter */
+.oob-flag { display: none !important; }
