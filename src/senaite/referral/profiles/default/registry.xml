@@ -7,7 +7,9 @@
       interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
       prefix="senaite.referral" />
 
-  <!-- ============ RESOURCE: SOLO CSS (sin JS) ============ -->
+  <!-- ============ RESOURCES ============ -->
+
+  <!-- CSS existente -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
       prefix="plone.resources/infolabsa-css"
@@ -15,7 +17,18 @@
     <value key="css">
       <element>++plone++senaite.referral.static/infolabsa.css</element>
     </value>
-    <!-- deps vacío es válido -->
+    <value key="deps" />
+  </records>
+
+  <!-- 🔹 NUEVO: JS para detectar/repintar filas OOR -->
+  <records
+      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
+      prefix="plone.resources/infolabsa-js"
+      purge="false">
+    <value key="js">
+      <element>++plone++senaite.referral.static/infolabsa.js</element>
+    </value>
+    <!-- jQuery ya viene del bundle; no declaramos deps -->
     <value key="deps" />
   </records>
 
@@ -25,7 +38,10 @@
       prefix="plone.bundles/senaite.core"
       purge="false">
     <value key="resources" purge="false">
+      <!-- mantenemos el CSS existente -->
       <element>infolabsa-css</element>
+      <!-- 🔹 añadimos el JS al mismo bundle -->
+      <element>infolabsa-js</element>
     </value>
     <value key="enabled">True</value>
     <value key="compile">False</value>
