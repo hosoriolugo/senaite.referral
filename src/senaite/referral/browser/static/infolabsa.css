@@ -6,7 +6,8 @@ table.listing-table tbody tr.row-flag-alert,
 table#listing tbody tr.row-flag-alert,
 table.table tbody tr.row-flag-alert,
 #content table.listing tbody tr.row-flag-alert,
-#content-core table.listing tbody tr.row-flag-alert {
+#content-core table.listing tbody tr.row-flag-alert,
+.contentstable tbody tr.row-flag-alert {
   background-color: #ffe5e3 !important; /* rojo suave, más visible que #fff1f0 */
 }
 
@@ -16,7 +17,8 @@ table.listing-table tbody tr.row-flag-alert > td,
 table#listing tbody tr.row-flag-alert > td,
 table.table tbody tr.row-flag-alert > td,
 #content table.listing tbody tr.row-flag-alert > td,
-#content-core table.listing tbody tr.row-flag-alert > td {
+#content-core table.listing tbody tr.row-flag-alert > td,
+.contentstable tbody tr.row-flag-alert > td {
   background-color: #ffe5e3 !important;
   border-top-color: #ffbdb8 !important; /* sutil separación */
 }
@@ -40,19 +42,25 @@ table.dataTable tbody tr.row-flag-alert > td {
 /* Zebra (.table-striped) y hover (.table-hover): mantener la alerta visible */
 table.table-striped tbody tr.row-flag-alert,
 table.table-hover tbody tr.row-flag-alert:hover,
-table.table-hover tbody tr.row-flag-alert:hover > td {
+table.table-hover tbody tr.row-flag-alert:hover > td,
+.contentstable.table-hover tbody tr.row-flag-alert:hover,
+.contentstable.table-hover tbody tr.row-flag-alert:hover > td {
   background-color: #ffe5e3 !important;
 }
 
 /* Aún con zebra odd/even, forzar el mismo rojo en la fila marcada */
 table.table-striped tbody tr.row-flag-alert:nth-of-type(odd) > td,
-table.table-striped tbody tr.row-flag-alert:nth-of-type(even) > td {
+table.table-striped tbody tr.row-flag-alert:nth-of-type(even) > td,
+.contentstable.table-striped tbody tr.row-flag-alert:nth-of-type(odd) > td,
+.contentstable.table-striped tbody tr.row-flag-alert:nth-of-type(even) > td {
   background-color: #ffe5e3 !important;
 }
 
 /* Cuando hay selección de fila (algunos temas usan .selected) mantener color y resaltar borde */
 tbody tr.row-flag-alert.selected > td,
-tbody tr.row-flag-alert.is-selected > td {
+tbody tr.row-flag-alert.is-selected > td,
+.contentstable tbody tr.row-flag-alert.selected > td,
+.contentstable tbody tr.row-flag-alert.is-selected > td {
   background-color: #ffd6d3 !important; /* un pelín más marcado en selección */
   box-shadow: inset 0 0 0 2px #ffb3ae;   /* contorno suave para indicar selección */
 }
@@ -64,7 +72,8 @@ tbody tr[data-row-alert="1"] > td:first-child {
 }
 
 /* Si el tema pinta hover por <td>, forzamos coherencia */
-tbody tr.row-flag-alert > td:hover {
+tbody tr.row-flag-alert > td:hover,
+.contentstable tbody tr.row-flag-alert > td:hover {
   background-color: #ffd6d3 !important;
 }
 
@@ -84,11 +93,52 @@ tbody tr.row-flag-alert > td:hover {
 .oob-flag { display: none !important; }
 
 /* Refuerzo extra contra selectores muy específicos de Bootstrap */
-.table.table-striped > tbody > tr.row-flag-alert > td {
+.table.table-striped > tbody > tr.row-flag-alert > td,
+.contentstable.table.table-striped > tbody > tr.row-flag-alert > td {
   background-color: #ffe5e3 !important;
 }
 
 /* Extra: algunas vistas aplican el fondo en celdas con .sorting_1 (DataTables) */
-table.dataTable tbody tr.row-flag-alert > td.sorting_1 {
+table.dataTable tbody tr.row-flag-alert > td.sorting_1,
+.contentstable.dataTable tbody tr.row-flag-alert > td.sorting_1 {
   background-color: #ffe5e3 !important;
+}
+
+/* Accesibilidad: asegurar contraste de texto en celdas clave (opcional, no invasivo) */
+tbody tr.row-flag-alert td.state_title,
+tbody tr.row-flag-alert td.Service,
+tbody tr.row-flag-alert td.getId,
+.contentstable tbody tr.row-flag-alert td.state_title,
+.contentstable tbody tr.row-flag-alert td.Service,
+.contentstable tbody tr.row-flag-alert td.getId {
+  color: #6b1f1a; /* texto ligeramente más oscuro para legibilidad */
+}
+
+/* Modo oscuro: ajustar tonos para que se perciba el alert en dark themes */
+@media (prefers-color-scheme: dark) {
+  table.listing tbody tr.row-flag-alert,
+  table.listing-table tbody tr.row-flag-alert,
+  table#listing tbody tr.row-flag-alert,
+  table.table tbody tr.row-flag-alert,
+  #content table.listing tbody tr.row-flag-alert,
+  #content-core table.listing tbody tr.row-flag-alert,
+  .contentstable tbody tr.row-flag-alert,
+  tr[data-row-alert="1"],
+  tr[data-row-alert="1"] > td {
+    background-color: #4a1f1c !important; /* rojo oscuro para dark */
+    border-top-color: #7a3a35 !important;
+  }
+  tbody tr.row-flag-alert.selected > td,
+  .contentstable tbody tr.row-flag-alert.selected > td {
+    background-color: #5a2723 !important;
+    box-shadow: inset 0 0 0 2px #8a4741;
+  }
+  tbody tr.row-flag-alert > td:first-child,
+  tbody tr[data-row-alert="1"] > td:first-child {
+    box-shadow: inset 4px 0 0 #a4524b;
+  }
+  tbody tr.row-flag-alert td.state_title,
+  .contentstable tbody tr.row-flag-alert td.state_title {
+    color: #ffd7d4;
+  }
 }
