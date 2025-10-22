@@ -1,35 +1,79 @@
 /* eslint-disable no-console */
 /*!
- * infolabsa.js — versión segura (sin observers ni hooks AJAX)
- * - Desactivado por defecto: no hace nada salvo exponer enable()/disable()
- * - No usa MutationObserver ni ajaxComplete (evita bucles y sobrecarga)
- * - Solo hace un escaneo pasivo una vez al cargar /samples
+ * infolabsa.js — versión segura con AUTODISABLE del anterior
  *
- * Activar:   localStorage.setItem("infolabsa.enabled","1"); location.reload();
- * Desactivar:localStorage.removeItem("infolabsa.enabled");  location.reload();
+ * Modo seguro:
+ *   - Por defecto NO hace nada.
+ *   - Exponer __infolabsa__.enable()/disable() siempre.
+ *   - En el PRIMER load tras desplegar este archivo:
+ *       * Desactiva cualquier "infolabsa.enabled" previo.
+ *       * Llama __infolabsa__.stop() si existiera de una versión anterior.
+ *       * Marca migración y recarga UNA sola vez.
+ *
+ * Activar manualmente (cuando tú quieras):
+ *   localStorage.setItem("infolabsa.enabled","1"); location.reload();
+ * Desactivar:
+ *   localStorage.removeItem("infolabsa.enabled");  location.reload();
  */
 (function () {
   "use strict";
 
-  // ====== FEATURE FLAG (inactivo por defecto) ======
-  function isEnabled() {
-    try { return localStorage.getItem("infolabsa.enabled") === "1"; }
-    catch (e) { return false; }
-  }
-  // Expón controles siempre, pero no ejecutes lógica si está desactivado
-  window.__infolabsa__ = {
-    enable: function(){
-      try { localStorage.setItem("infolabsa.enabled","1"); location.reload(); } catch(e){}
-    },
-    disable: function(){
-      try { localStorage.removeItem("infolabsa.enabled"); location.reload(); } catch(e){}
-    },
-    // para pruebas manuales en consola
-    rescan: function(){ /* no-op hasta que esté activado */ }
-  };
-  if (!isEnabled()) return;
+  // ====== Etapa 0: entorno seguro ======
+  try {
+    if (typeof window === "undefined" || !window.document) return;
+  } catch (_e) { return; }
 
-  // ====== CONFIG (conservador) ======
+  // ====== Etapa 1: “matar” versión anterior una sola vez ======
+  // Cambia el valor si vuelves a necesitar forzar este paso en otra actualización.
+  var MIGRATION_TAG = "v2.0-autodisable-2025-10-22";
+  try {
+    var ls = window.localStorage;
+    var alreadyMigrated = ls.getItem("infolabsa.migrated") === MIGRATION_TAG;
+
+    if (!alreadyMigrated) {
+      // Si existía un objeto anterior con método de parada, intentalo.
+      try {
+        if (window.__infolabsa__ && typeof window.__infolabsa__.stop === "function") {
+          window.__infolabsa__.stop();
+        }
+      } catch (_eStop) {}
+
+      // Desactiva cualquier activación previa y marca migración.
+      try { ls.removeItem("infolabsa.enabled"); } catch (_e1) {}
+      try { ls.setItem("infolabsa.migrated", MIGRATION_TAG); } catch (_e2) {}
+
+      // Evita recargas en bucle:
+      var reloadedOnce = ls.getItem("infolabsa.reloadedOnce") === "1";
+      if (!reloadedOnce) {
+        try { ls.setItem("infolabsa.reloadedOnce", "1"); } catch (_e3) {}
+        // Recarga una sola vez para que el sitio arranque SIN el estado previo activado.
+        try { location.reload(); return; } catch (_e4) {}
+      }
+    }
+  } catch (_eMig) {
+    // Si localStorage falla, seguimos; el archivo sigue siendo no-op por defecto.
+  }
+
+  // ====== Etapa 2: API pública SIEMPRE disponible ======
+  function setLS(key, val){ try { localStorage.setItem(key, val); } catch(_e){} }
+  function delLS(key){ try { localStorage.removeItem(key); } catch(_e){} }
+
+  // Sobrescribe cualquier __infolabsa__ viejo con una API mínima y segura
+  window.__infolabsa__ = {
+    enable: function () { setLS("infolabsa.enabled","1"); try{ location.reload(); }catch(_e){} },
+    disable: function () { delLS("infolabsa.enabled");  try{ location.reload(); }catch(_e){} },
+    rescan: function () { /* no-op hasta que esté activado */ },
+    // stop() existe por compatibilidad: no hay observers en esta versión.
+    stop: function () { /* no-op en versión segura */ }
+  };
+
+  // ====== Etapa 3: si NO está activado, salimos (no-op) ======
+  var enabled = false;
+  try { enabled = localStorage.getItem("infolabsa.enabled") === "1"; } catch (_e) { enabled = false; }
+  if (!enabled) return;
+
+  // ====== (Opcional) Lógica mínima y pasiva cuando SÍ esté activado ======
+  // Sin observers ni hooks AJAX: una sola lectura del DOM en /samples.
   var TABLE_SELECTORS = [
     "table.listing",
     "table.listing-table",
@@ -38,51 +82,31 @@
     ".app-listing table"
   ];
 
-  // Patrones muy simples para “fuera de rango”
   var OOR_TEXT_PATTERNS = [
-    "fuera de rango",
-    "out of range",
-    "oor",
-    "range violation",
-    "out-of-range"
+    "fuera de rango", "out of range", "oor", "range violation", "out-of-range"
   ];
   var OOR_ICON_HINTS = ["exclamation", "warning", "exclamation_red.svg", "warning.svg"];
 
-  // Estados relevantes de muestra (solo español/inglés más comunes)
   var SAMPLE_REVIEW_STATES_TO_CHECK = [
-    "to_be_verified",
-    "por verificar",
-    "pendiente de verificar",
-    "pending verification",
-    "verified",
-    "verificada",
-    "verificado"
+    "to_be_verified", "por verificar", "pendiente de verificar",
+    "pending verification", "verified", "verificada", "verificado"
   ];
 
-  // ====== UTILS ======
-  function isDebug() {
-    try { return localStorage.getItem("infolabsa.debug") === "1"; } catch (e) { return false; }
-  }
-  function log(){ if(isDebug()) { var a=[].slice.call(arguments); a.unshift("[infolabsa]"); try{console.log.apply(console,a);}catch(e){} } }
+  function isDebug(){ try { return localStorage.getItem("infolabsa.debug") === "1"; } catch(_e){ return false; } }
+  function log(){ if(!isDebug()) return; try { var a=[].slice.call(arguments); a.unshift("[infolabsa]"); console.log.apply(console,a); } catch(_e){} }
   function safe(fn){ try { fn(); } catch(e){ log("safe err", e); } }
-
-  function isSamplesListPage() {
-    try { return /\/samples\/?(?:[?#]|$)/.test(location.pathname || ""); }
-    catch(e){ return false; }
-  }
+  function isSamplesListPage(){ try { return /\/samples\/?(?:[?#]|$)/.test(location.pathname || ""); } catch(_e){ return false; } }
 
   function markRow(tr){
     try{
-      if (!tr) return;
       tr.classList.add("row-flag-alert");
       tr.setAttribute("data-row-alert","1");
       tr.setAttribute("data-infolabsa-processed","1");
-    }catch(e){ log("markRow err",e); }
+    } catch(e){ log("markRow err", e); }
   }
 
   function rowLooksOOR(tr){
     try{
-      if (!tr) return false;
       if (tr.classList.contains("row-flag-alert") || tr.getAttribute("data-row-alert")==="1") return true;
       if (tr.getAttribute("data-has-oor")==="1" || tr.querySelector('[data-oor="1"]')) return true;
 
@@ -100,7 +124,7 @@
       for (var t=0;t<OOR_TEXT_PATTERNS.length;t++){
         if (text.indexOf(OOR_TEXT_PATTERNS[t])>-1) return true;
       }
-    }catch(e){ log("rowLooksOOR err",e); }
+    } catch(e){ log("rowLooksOOR err", e); }
     return false;
   }
 
@@ -110,32 +134,21 @@
       for (var i=0;i<SAMPLE_REVIEW_STATES_TO_CHECK.length;i++){
         if (text.indexOf(SAMPLE_REVIEW_STATES_TO_CHECK[i])>-1) return true;
       }
-    }catch(e){}
+    } catch(_e){}
     return false;
   }
 
-  // ====== Núcleo (solo DOM, cero AJAX, una sola pasada) ======
   function processTable(tbl){
-    if (!tbl) return;
     var tbody = tbl.tBodies && tbl.tBodies[0];
     if (!tbody) return;
-
     var rows = Array.prototype.slice.call(tbody.rows || []);
-    if (!rows.length) return;
-
     var marked = 0;
     for (var i=0;i<rows.length;i++){
       var tr = rows[i];
       if (tr.getAttribute("data-infolabsa-processed")==="1") continue;
-
       if (!rowStateRelevant(tr)) { tr.setAttribute("data-infolabsa-processed","1"); continue; }
-
-      if (rowLooksOOR(tr)) {
-        markRow(tr);
-        marked++;
-      } else {
-        tr.setAttribute("data-infolabsa-processed","1");
-      }
+      if (rowLooksOOR(tr)) { markRow(tr); marked++; }
+      else { tr.setAttribute("data-infolabsa-processed","1"); }
     }
     log("processTable: filas=", rows.length, "marcadas=", marked);
   }
@@ -148,7 +161,9 @@
       var sel = TABLE_SELECTORS[s];
       var tables = root.querySelectorAll(sel);
       totalTables += tables.length;
-      for (var i=0;i<tables.length;i++) safe(function(tbl){ return function(){ processTable(tbl); }; }(tables[i]));
+      for (var i=0;i<tables.length;i++){
+        (function(tbl){ safe(function(){ processTable(tbl); }); })(tables[i]);
+      }
     }
     log("scanAll: tablas=", totalTables);
   }
@@ -156,13 +171,11 @@
   function init(){
     if (!(document && document.body)) return;
     if (!isSamplesListPage()) { log("init: fuera de /samples (noop)"); return; }
-    log("init @samples (enabled, modo seguro)");
-    // ÚNICA pasada: no se re-engancha a nada
-    // pequeño deferral para dejar que la tabla esté en el DOM
+    log("init @samples (enabled, modo seguro sin observers)");
+    // una sola pasada, con pequeño delay para permitir que la tabla exista
     setTimeout(function(){ safe(function(){ scanAll(document); }); }, 50);
-
-    // expón rescan manual, por si el usuario quiere forzarlo en consola:
-    window.__infolabsa__.rescan = function(){ if (isSamplesListPage()) { scanAll(document); } };
+    // rescan manual por consola, si lo necesitas
+    window.__infolabsa__.rescan = function(){ if (isSamplesListPage()) scanAll(document); };
   }
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
