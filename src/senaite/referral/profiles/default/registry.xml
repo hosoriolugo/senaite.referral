@@ -7,38 +7,29 @@
       interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
       prefix="senaite.referral" />
 
-  <!-- ===== Recurso CSS ===== -->
+  <!-- Recurso CSS -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
       prefix="plone.resources/infolabsa-css"
       purge="false">
-    <!-- OJO: value simple, NO <element> -->
     <value key="css">++plone++senaite.referral.static/infolabsa.css</value>
     <value key="deps" />
-    <!-- opcionales útiles -->
-    <value key="export">False</value>
-    <value key="enabled">True</value>
   </records>
 
-  <!-- ===== Recurso JS ===== -->
+  <!-- Recurso JS -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
       prefix="plone.resources/infolabsa-js"
       purge="false">
-    <!-- OJO: value simple, NO <element> -->
     <value key="js">++plone++senaite.referral.static/infolabsa.js</value>
     <value key="deps" />
-    <!-- opcionales útiles -->
-    <value key="export">False</value>
-    <value key="enabled">True</value>
   </records>
 
-  <!-- ===== Bundle widgets: añadir CSS + JS ===== -->
+  <!-- Bundle widgets -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
       prefix="plone.bundles/senaite.core.widgets"
       purge="false">
-    <!-- Aquí sí es tupla => usar <element> -->
     <value key="resources" purge="false">
       <element>infolabsa-css</element>
       <element>infolabsa-js</element>
@@ -47,7 +38,7 @@
     <value key="compile">False</value>
   </records>
 
-  <!-- ===== Bundle core (cobertura extra) ===== -->
+  <!-- Bundle core (cobertura extra) -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
       prefix="plone.bundles/senaite.core"
