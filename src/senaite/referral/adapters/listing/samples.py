@@ -127,6 +127,8 @@ class SamplesListingViewAdapter(object):
     def __init__(self, listing, context):
         self.listing = listing
         self.context = context
+        # ✅ micro-cache por petición: UID de Sample -> bool (tiene OOR)
+        self._infolabsa_oor_cache = {}
 
     @check_installed(None)
     def before_render(self):
@@ -176,114 +178,131 @@ class SamplesListingViewAdapter(object):
         # === INFOLABSA: sombrear fila si existe al menos un analito fuera de rango ===
         try:
             uid = api.get_uid(obj)
-            any_oof = False
 
-            # A) Short-circuit por APIs agregadas (como hace senaite.patient/impress)
-            if any(bool(_pick(obj, n)) for n in (
-                # nombres habituales en AR/Sample
-                "hasOutOfRange", "getOutOfRange", "isOutOfRange",
-                "getAnalysesOutOfRange", "getOutOfRangeAnalyses", "getOORCount",
-                "getResultOutOfRange",
-            )):
-                val = _pick(obj, "getOORCount", "getAnalysesOutOfRange",
-                            "getOutOfRangeAnalyses") or True
-                try:
-                    # lista/conteo o booleano
+            # ✅ short-circuit por caché
+            cached = self._infolabsa_oor_cache.get(uid, None)
+            if cached is not None:
+                any_oof = bool(cached)
+            else:
+                any_oof = False
+
+                # A) Short-circuit por APIs agregadas (como hace senaite.patient/impress)
+                if any(bool(_pick(obj, n)) for n in (
+                    # nombres habituales en AR/Sample
+                    "hasOutOfRange", "getOutOfRange", "isOutOfRange",
+                    "getAnalysesOutOfRange", "getOutOfRangeAnalyses", "getOORCount",
+                    "getResultOutOfRange",
+                )):
+                    val = _pick(obj, "getOORCount", "getAnalysesOutOfRange",
+                                "getOutOfRangeAnalyses") or True
                     try:
-                        from numbers import Number
-                        is_number = isinstance(val, Number)
-                    except Exception:
+                        # lista/conteo o booleano
                         try:
-                            is_number = isinstance(val, (int, long))  # noqa
+                            from numbers import Number
+                            is_number = isinstance(val, Number)
                         except Exception:
-                            is_number = False
-                    if isinstance(val, (list, tuple, set)):
-                        any_oof = len(val) > 0
-                    elif is_number:
-                        any_oof = val > 0
-                    else:
-                        any_oof = bool(val)
-                except Exception:
-                    any_oof = True
+                            try:
+                                is_number = isinstance(val, (int, long))  # noqa
+                            except Exception:
+                                is_number = False
+                        if isinstance(val, (list, tuple, set)):
+                            any_oof = len(val) > 0
+                        elif is_number:
+                            any_oof = val > 0
+                        else:
+                            any_oof = bool(val)
+                    except Exception:
+                        any_oof = True
 
-            analyses_objs = []
-            # B) Si no hubo short-circuit, intenta sacar los análisis del objeto
-            if not any_oof:
-                for getter in ("getAnalyses", "analyses", "getAnalysesFull"):
-                    if hasattr(obj, getter):
-                        try:
-                            res = getattr(obj, getter)()
-                            if res:
-                                try:
-                                    res = list(res)
-                                except Exception:
-                                    pass
-                                for a in res:
+                analyses_objs = []
+                # B) Si no hubo short-circuit, intenta sacar los análisis del objeto
+                if not any_oof:
+                    for getter in ("getAnalyses", "analyses", "getAnalysesFull"):
+                        if hasattr(obj, getter):
+                            try:
+                                res = getattr(obj, getter)()
+                                if res:
                                     try:
-                                        analyses_objs.append(
-                                            a.getObject() if hasattr(a, "getObject") else a
-                                        )
+                                        res = list(res)
                                     except Exception:
                                         pass
+                                    for a in res:
+                                        try:
+                                            analyses_objs.append(
+                                                a.getObject() if hasattr(a, "getObject") else a
+                                            )
+                                        except Exception:
+                                            pass
+                            except Exception:
+                                pass
+                            if analyses_objs:
+                                break
+
+                # C) Catálogo: primero una consulta EXACTA como en el detalle,
+                #    luego fallbacks con llaves alternativas e índices OOR
+                if not any_oof and not analyses_objs:
+                    ac = None
+                    try:
+                        ac = api.get_tool("senaite_catalog_analysis")
+                    except Exception:
+                        try:
+                            from senaite.core.catalog import ANALYSIS_CATALOG
+                            ac = api.get_tool(ANALYSIS_CATALOG)
                         except Exception:
-                            pass
-                        if analyses_objs:
-                            break
+                            ac = None
 
-            # C) Catálogo: primero una consulta EXACTA como en el detalle,
-            #    luego fallbacks con llaves alternativas e índices OOR
-            if not any_oof and not analyses_objs:
-                ac = None
-                try:
-                    ac = api.get_tool("senaite_catalog_analysis")
-                except Exception:
-                    try:
-                        from senaite.core.catalog import ANALYSIS_CATALOG
-                        ac = api.get_tool(ANALYSIS_CATALOG)
-                    except Exception:
-                        ac = None
+                    brains = []
 
-                brains = []
+                    # --- C1) Consulta 1: EXACTA (igual a LabAnalysesTable) ---
+                    if ac is not None:
+                        try:
+                            brains = ac(
+                                portal_type="Analysis",
+                                getAncestorsUIDs=[uid],
+                                getPointOfCapture="lab",
+                                sort_on="sortable_title",
+                                sort_order="ascending",
+                                review_state=[
+                                    "registered", "unassigned", "assigned",
+                                    "to_be_verified", "verified", "published", "referred",
+                                ],
+                            )
+                        except Exception:
+                            brains = []
 
-                # --- C1) Consulta 1: EXACTA (igual a LabAnalysesTable) ---
-                if ac is not None:
-                    try:
-                        brains = ac(
-                            portal_type="Analysis",
-                            getAncestorsUIDs=[uid],
-                            getPointOfCapture="lab",
-                            sort_on="sortable_title",
-                            sort_order="ascending",
-                            review_state=[
-                                "registered", "unassigned", "assigned",
-                                "to_be_verified", "verified", "published", "referred",
-                            ],
+                    # --- C2) Si sigue vacío, usar llaves alternativas + índices OOR ---
+                    if not brains:
+                        qkeys = (
+                            {"getAncestorsUIDs": [uid]},
+                            {"getRequestUID": uid},
+                            {"getAnalysisRequestUID": uid},
+                            {"getSampleUID": uid},
                         )
-                    except Exception:
-                        brains = []
+                        bool_filters = (
+                            {"result_out_of_range": True},
+                            {"out_of_range": True},
+                            {"has_out_of_range": True},
+                        )
 
-                # --- C2) Si sigue vacío, usar llaves alternativas + índices OOR ---
-                if not brains:
-                    qkeys = (
-                        {"getAncestorsUIDs": [uid]},
-                        {"getRequestUID": uid},
-                        {"getAnalysisRequestUID": uid},
-                        {"getSampleUID": uid},
-                    )
-                    bool_filters = (
-                        {"result_out_of_range": True},
-                        {"out_of_range": True},
-                        {"has_out_of_range": True},
-                    )
-
-                    def extend_brains(catalog, base):
-                        seen = set()
-                        # primero con filtros OOR (si el índice existe)
-                        for extra in bool_filters:
+                        def extend_brains(catalog, base):
+                            seen = set()
+                            # primero con filtros OOR (si el índice existe)
+                            for extra in bool_filters:
+                                for q in qkeys:
+                                    qq = base.copy()
+                                    qq.update(q)
+                                    qq.update(extra)
+                                    try:
+                                        for b in catalog(**qq):
+                                            if b.UID not in seen:
+                                                brains.append(b)
+                                                seen.add(b.UID)
+                                    except Exception:
+                                        pass
+                            # luego sin filtros (compatibilidad)
                             for q in qkeys:
                                 qq = base.copy()
                                 qq.update(q)
-                                qq.update(extra)
                                 try:
                                     for b in catalog(**qq):
                                         if b.UID not in seen:
@@ -291,48 +310,40 @@ class SamplesListingViewAdapter(object):
                                             seen.add(b.UID)
                                 except Exception:
                                     pass
-                        # luego sin filtros (compatibilidad)
-                        for q in qkeys:
-                            qq = base.copy()
-                            qq.update(q)
+
+                        if ac is not None:
+                            extend_brains(ac, {
+                                "portal_type": "Analysis",
+                                "sort_on": "sortable_title",
+                                "sort_order": "ascending",
+                            })
+
+                        # Fallback final con portal_catalog
+                        if not brains:
                             try:
-                                for b in catalog(**qq):
-                                    if b.UID not in seen:
-                                        brains.append(b)
-                                        seen.add(b.UID)
+                                pc = getToolByName(self.context, "portal_catalog")
+                                extend_brains(pc, {"portal_type": "Analysis"})
                             except Exception:
                                 pass
 
-                    if ac is not None:
-                        extend_brains(ac, {
-                            "portal_type": "Analysis",
-                            "sort_on": "sortable_title",
-                            "sort_order": "ascending",
-                        })
-
-                    # Fallback final con portal_catalog
-                    if not brains:
+                    # Convertir brains a objetos
+                    for b in brains or []:
                         try:
-                            pc = getToolByName(self.context, "portal_catalog")
-                            extend_brains(pc, {"portal_type": "Analysis"})
+                            a = b.getObject()
                         except Exception:
-                            pass
+                            a = None
+                        if a is not None:
+                            analyses_objs.append(a)
 
-                # Convertir brains a objetos
-                for b in brains or []:
-                    try:
-                        a = b.getObject()
-                    except Exception:
-                        a = None
-                    if a is not None:
-                        analyses_objs.append(a)
+                # D) Evaluación final
+                if not any_oof:
+                    for a in analyses_objs:
+                        if _analysis_is_oof(a):
+                            any_oof = True
+                            break
 
-            # D) Evaluación final
-            if not any_oof:
-                for a in analyses_objs:
-                    if _analysis_is_oof(a):
-                        any_oof = True
-                        break
+                # ✅ guarda en caché (true/false) para este UID
+                self._infolabsa_oor_cache[uid] = bool(any_oof)
 
             # E) Marcar fila
             if any_oof:
