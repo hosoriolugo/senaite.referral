@@ -53,7 +53,21 @@ def _to_num(x):
 
 def _analysis_is_oof(a):
     """True si el Analysis está fuera de rango (flags o min/max)."""
-    # 1) Flags existentes
+    # 0) Getters booleanos presentes en algunos builds
+    for getter in ("getOutOfRange", "isOutOfRange", "isResultOutOfRange", "getResultOutOfRange"):
+        if hasattr(a, getter):
+            try:
+                val = getattr(a, getter)()
+            except TypeError:
+                val = getattr(a, getter)
+            try:
+                if bool(val):
+                    return True
+            except Exception:
+                if val:
+                    return True
+
+    # 1) Flags existentes (texto)
     for attr in ("getResultFlag", "getResultFlags", "result_flag"):
         if hasattr(a, attr):
             try:
@@ -159,12 +173,20 @@ class SamplesListingViewAdapter(object):
         try:
             uid = api.get_uid(obj)
 
-            # Preferir el catálogo de análisis real de SENAITE (según logs: senaite_catalog_analysis)
+            # 1) Intento directo por nombre del tool (más robusto en SENAITE 2.6)
+            ac = None
             try:
-                from senaite.core.catalog import ANALYSIS_CATALOG  # nombre del tool
-                ac = api.get_tool(ANALYSIS_CATALOG)  # "senaite_catalog_analysis"
+                ac = api.get_tool("senaite_catalog_analysis")
             except Exception:
                 ac = None
+
+            # 2) Mantener tu plan original (no rompemos nada que ya funcione)
+            if ac is None:
+                try:
+                    from senaite.core.catalog import ANALYSIS_CATALOG  # nombre del tool
+                    ac = api.get_tool(ANALYSIS_CATALOG)  # "senaite_catalog_analysis"
+                except Exception:
+                    ac = None
 
             brains = []
             if ac is not None:
@@ -176,7 +198,7 @@ class SamplesListingViewAdapter(object):
                     sort_order="ascending",
                 )
 
-            # Fallback: portal_catalog con los índices clásicos (por compatibilidad)
+            # 3) Fallback final: portal_catalog (compatibilidad)
             if not brains:
                 pc = getToolByName(self.context, "portal_catalog")
                 brains = pc(portal_type="Analysis", getRequestUID=uid)
