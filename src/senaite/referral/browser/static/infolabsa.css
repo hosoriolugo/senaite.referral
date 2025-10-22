@@ -168,3 +168,9 @@ table.table tbody tr:has(.oob-flag[data-oor="1"]) > td:first-child {
   background-color: #ffe5e3 !important;
   border-top-color: #ffbdb8 !important;
 }
+
+/* TEST TEMPORAL: debería dibujar un borde fucsia en la 1ª fila del listado */
+.contentstable tbody tr:first-child > td {
+  outline: 3px solid fuchsia !important;
+}
+
