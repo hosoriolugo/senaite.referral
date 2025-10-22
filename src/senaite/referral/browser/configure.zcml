@@ -60,4 +60,13 @@
       permission="zope2.View"
       layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
 
+  <!-- Inyecta infolabsa.css + infolabsa.js en <head> -->
+  <browser:viewlet
+      name="senaite.referral.infolabsa-assets"
+      manager="plone.app.layout.viewlets.interfaces.IHtmlHead"
+      class=".viewlets.infolabsa.InfolabsaAssetsViewlet"
+      permission="zope2.View"
+      layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
+
+
 </configure>
