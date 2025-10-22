@@ -1,4 +1,4 @@
-/* eslint-disable no-console */ 
+/* eslint-disable no-console */
 (function () {
   "use strict";
 
@@ -20,32 +20,26 @@
     "out-of-range"
   ];
 
-  // Añadimos "resultsinterpretation" por si el SVG se usa también en el listado
-  var OOR_ICON_HINTS = ["exclamation", "warning", "exclamation_red.svg", "warning.svg", "resultsinterpretation"];
+  var OOR_ICON_HINTS = ["exclamation", "warning", "exclamation_red.svg", "warning.svg"];
 
-  // Estados del listado de muestras que vale la pena revisar en servidor
-  // (cuando están pendientes de verificar o ya verificadas)
+  // Estados del listado de muestras a considerar
   var SAMPLE_REVIEW_STATES_TO_CHECK = [
-    "to_be_verified",          // backend
-    "por verificar",           // UI ES
-    "pendiente de verificar",  // UI ES variante
-    "pending verification",    // UI EN
-    "verified",                // backend/UI EN
-    "verificada",              // UI ES
-    "verificadas",             // UI ES plural
-    "verificado"               // UI ES género alterno
+    // Pendiente de verificar
+    "to_be_verified",
+    "por verificar",
+    "pendiente de verificar",
+    "pending verification",
+    // Verificada
+    "verified",
+    "verificada",
+    "verificadas",
+    "verificado"
   ];
-
-  // Límite de concurrencia para llamadas AJAX por fila
-  var MAX_CONCURRENT = 3;
 
   // ========== UTILS ==========
   function isDebug() {
-    try {
-      return window && window.localStorage && localStorage.getItem("infolabsa.debug") === "1";
-    } catch (e) {
-      return false;
-    }
+    try { return window && window.localStorage && localStorage.getItem("infolabsa.debug") === "1"; }
+    catch (e) { return false; }
   }
   function log() {
     if (!isDebug()) return;
@@ -62,73 +56,59 @@
     };
   }
 
+  // Solo actuamos en el LISTADO de muestras (no en detalle, no en otras vistas)
   function isSamplesListPage() {
     try {
-      return /\/samples(?:[/?#]|$)/.test(location.pathname);
+      var p = location.pathname || "";
+      // /.../samples  (termina en /samples, admitimos /samples/ y querystring)
+      return /\/samples\/?(?:[?#]|$)/.test(p);
     } catch (e) { return false; }
   }
 
   function markRow(tr) {
     if (!tr) return;
-    if (!tr.classList.contains("row-flag-alert")) {
-      tr.classList.add("row-flag-alert");
-    }
-    if (tr.getAttribute("data-row-alert") !== "1") {
-      tr.setAttribute("data-row-alert", "1");
-    }
-  }
-
-  function getAuthToken() {
-    try {
-      // Plone/SENAITE frecuentemente tiene este input en la página
-      var el = document.querySelector('input[name="_authenticator"]');
-      return el ? el.value : null;
-    } catch (e) {
-      return null;
-    }
+    if (!tr.classList.contains("row-flag-alert")) tr.classList.add("row-flag-alert");
+    if (tr.getAttribute("data-row-alert") !== "1") tr.setAttribute("data-row-alert", "1");
+    // flag interno para no reprocesar
+    tr.setAttribute("data-infolabsa-processed", "1");
   }
 
   function getSampleUIDFromRow(tr) {
     if (!tr) return null;
-    var attrCandidates = ["data-uid","data-sample-uid","data-uid-sample","data-sampleuid","data-uid"];
-    for (var i = 0; i < attrCandidates.length; i++) {
-      var v = tr.getAttribute(attrCandidates[i]);
+    var attrs = ["data-uid","data-sample-uid","data-uid-sample","data-sampleuid","data-uid"];
+    for (var i = 0; i < attrs.length; i++) {
+      var v = tr.getAttribute(attrs[i]);
       if (v) return v;
     }
     try {
-      var firstLink = tr.querySelector("td a[href]");
-      if (firstLink) {
-        var href = firstLink.getAttribute("href") || "";
+      var a = tr.querySelector("td a[href]");
+      if (a) {
+        var href = a.getAttribute("href") || "";
         var parts = href.split(/[\/#?]/).filter(Boolean);
         if (parts.length) return parts[parts.length - 1];
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
     return null;
   }
 
   function rowLooksOOR(tr) {
     if (!tr) return false;
-    if (tr.classList.contains("row-flag-alert") || tr.getAttribute("data-row-alert") === "1") {
-      return true;
-    }
-    if (tr.getAttribute("data-has-oor") === "1" || tr.querySelector('[data-oor="1"]')) {
-      return true;
-    }
-    // Heurística por iconos incrustados en la MISMA fila
+    if (tr.classList.contains("row-flag-alert") || tr.getAttribute("data-row-alert") === "1") return true;
+    if (tr.getAttribute("data-has-oor") === "1" || tr.querySelector('[data-oor="1"]')) return true;
+
+    // Heurística por iconos incrustados en la MISMA fila del listado
     var imgs = tr.querySelectorAll("img, svg, use");
     for (var i = 0; i < imgs.length; i++) {
       var el = imgs[i];
       var src = (el.getAttribute("src") || el.getAttribute("href") || "").toLowerCase();
       var alt = (el.getAttribute("alt") || el.getAttribute("title") || "").toLowerCase();
-      if (OOR_ICON_HINTS.some(function (k) { return src.indexOf(k) > -1 || alt.indexOf(k) > -1; })) {
-        return true;
-      }
+      if (OOR_ICON_HINTS.some(function (k) { return src.indexOf(k) > -1 || alt.indexOf(k) > -1; })) return true;
     }
+
     // Heurística por texto en la MISMA fila
     var text = (tr.innerText || "").toLowerCase();
-    if (OOR_TEXT_PATTERNS.some(function (k) { return text.indexOf(k) > -1; })) {
-      return true;
-    }
+    if (OOR_TEXT_PATTERNS.some(function (k) { return text.indexOf(k) > -1; })) return true;
+
     return false;
   }
 
@@ -140,118 +120,13 @@
     if (!x) return new Set();
     if (x instanceof Set) return x;
     if (Array.isArray(x)) return new Set(x);
-    try { return new Set(Object.values(x)); }
-    catch (e) { return new Set(); }
-  }
-
-  // ========== Backfill cliente para /samples ==========
-  // Cache de UIDs ya evaluados para no repetir
-  var checkedUIDs = new Set();
-  // Cola simple con límite de concurrencia
-  var queue = [];
-  var running = 0;
-
-  function enqueue(task) {
-    queue.push(task);
-    drain();
-  }
-  function drain() {
-    while (running < MAX_CONCURRENT && queue.length) {
-      var t = queue.shift();
-      running++;
-      t(function done() {
-        running--;
-        drain();
-      });
-    }
-  }
-
-  function statusCellText(tr) {
-    try {
-      // intenta encontrar la celda de estado por cabecera o por clase común
-      // 1) por data-title (DataTables en Senaite suele poner el título en data-title)
-      var td = tr.querySelector('td[data-title*="state" i], td[data-title*="estado" i]') ||
-               tr.querySelector('td.state, td.review_state') ||
-               tr.querySelector('td:nth-child(contains("state"))'); // fallback
-      return (td ? td.innerText : tr.innerText || "").trim().toLowerCase();
-    } catch (e) {
-      return (tr.innerText || "").toLowerCase();
-    }
-  }
-
-  function shouldCheckServerForRow(tr) {
-    if (!isSamplesListPage()) return false;
-    // Sólo nos interesa si NO se detectó ya OOR en la fila y el estado es "por verificar" o "verificada"
-    if (rowLooksOOR(tr)) return false;
-    var txt = statusCellText(tr);
-    return SAMPLE_REVIEW_STATES_TO_CHECK.some(function (k) { return txt.indexOf(k) > -1; });
-  }
-
-  function getSampleURLFromRow(tr) {
-    var a = tr && tr.querySelector("td a[href]");
-    return a ? a.getAttribute("href") : null;
-  }
-
-  function buildAnalysesAjaxURL(sampleUrl) {
-    // Ej: /clients/client-1/Q3E2510170001/table_lab_analyses/folderitems
-    if (!sampleUrl) return null;
-    var base = sampleUrl.replace(/\/+$/, "");
-    return base + "/table_lab_analyses/folderitems";
-  }
-
-  function responseLooksOOR(json) {
-    try {
-      var s = JSON.stringify(json).toLowerCase();
-      if (OOR_TEXT_PATTERNS.some(function (k) { return s.indexOf(k) > -1; })) return true;
-      if (OOR_ICON_HINTS.some(function (k) { return s.indexOf(k) > -1; })) return true;
-    } catch (e) { /* ignore */ }
-    return false;
-  }
-
-  function checkRowServerSide(tr) {
-    var uid = getSampleUIDFromRow(tr);
-    if (!uid || checkedUIDs.has(uid)) return;
-
-    var sampleUrl = getSampleURLFromRow(tr);
-    var ajaxUrl = buildAnalysesAjaxURL(sampleUrl);
-    if (!ajaxUrl) return;
-
-    var token = getAuthToken();
-
-    enqueue(function (done) {
-      log("AJAX OOR check:", uid, ajaxUrl);
-      // Usamos jQuery si está (siempre lo carga SENAITE)
-      var payload = token ? { _authenticator: token } : {};
-      try {
-        jQuery.ajax({
-          url: ajaxUrl,
-          type: "POST",
-          data: payload,
-          dataType: "json"
-        }).done(function (json) {
-          checkedUIDs.add(uid);
-          if (responseLooksOOR(json)) {
-            markRow(tr);
-            tr.setAttribute("data-infolabsa-processed", "1");
-            log("→ OOR detectado vía AJAX en", uid);
-          } else {
-            log("→ sin OOR en", uid);
-          }
-        }).fail(function (xhr, status) {
-          log("AJAX fallo", status, ajaxUrl);
-        }).always(function () {
-          done();
-        });
-      } catch (e) {
-        log("AJAX error", e);
-        done();
-      }
-    });
+    try { return new Set(Object.values(x)); } catch (e) { return new Set(); }
   }
 
   // ========== Núcleo ==========
   function processTable(tbl) {
     if (!tbl) return;
+    if (!isSamplesListPage()) return; // 🚫 Nunca tocar otras vistas (incluye detalle de muestra)
     var tbody = tbl.tBodies && tbl.tBodies[0];
     if (!tbody) return;
 
@@ -261,63 +136,66 @@
     var pre = Date.now();
     var markedByHeuristics = 0;
 
-    // 1) Heurística local
+    // 1) Heurística local (no hace llamadas al servidor)
     rows.forEach(function (tr) {
       if (rowLooksOOR(tr)) {
         markRow(tr);
-        tr.setAttribute("data-infolabsa-processed", "1");
         markedByHeuristics++;
       }
     });
     log("processTable: filas=", rows.length, "marcadas x heurística=", markedByHeuristics);
 
-    // 2) Helper del backend si existe (batch, más eficiente)
+    // 2) Helper del backend si existe (batch → cero impacto)
     if (hasHelper()) {
       var unresolved = rows.filter(function (tr) {
         return tr.getAttribute("data-infolabsa-processed") !== "1";
       });
+
+      if (unresolved.length === 0) return;
+
       var uidMap = new Map();
       unresolved.forEach(function (tr) {
+        // Solo tiene sentido consultar si el estado es relevante (pendiente/verificada)
+        var txt = (tr.innerText || "").toLowerCase();
+        var matchState = SAMPLE_REVIEW_STATES_TO_CHECK.some(function (k) { return txt.indexOf(k) > -1; });
+        if (!matchState) return;
+
         var uid = getSampleUIDFromRow(tr);
         if (uid) {
           if (!uidMap.has(uid)) uidMap.set(uid, []);
           uidMap.get(uid).push(tr);
         }
       });
+
       var uids = Array.from(uidMap.keys());
-      if (uids.length) {
-        log("consultando helper con", uids.length, "uids");
-        window.infolabsaGetOorSamples(uids)
-          .then(function (result) {
-            var oorSet = toSet(result);
-            uids.forEach(function (uid) {
-              var trs = uidMap.get(uid) || [];
-              var isOOR = oorSet.has(uid);
-              trs.forEach(function (tr) {
-                if (isOOR) markRow(tr);
-                tr.setAttribute("data-infolabsa-processed", "1");
-              });
+      if (!uids.length) return;
+
+      log("consultando helper con", uids.length, "uids");
+      window.infolabsaGetOorSamples(uids)
+        .then(function (result) {
+          var oorSet = toSet(result);
+          uids.forEach(function (uid) {
+            var trs = uidMap.get(uid) || [];
+            var isOOR = oorSet.has(uid);
+            trs.forEach(function (tr) {
+              if (isOOR) markRow(tr);
+              else tr.setAttribute("data-infolabsa-processed", "1");
             });
-            log("helper: completado en", (Date.now() - pre) + "ms");
-          })
-          .catch(function (err) { log("helper error", err); });
-      }
-      return; // si hay helper no hace falta seguir
+          });
+          log("helper: completado en", (Date.now() - pre) + "ms");
+        })
+        .catch(function (err) { log("helper error", err); });
     }
 
-    // 3) SIN helper → sólo /samples y estados "por verificar" o "verificada": fetch liviano por fila, con concurrencia limitada
-    if (isSamplesListPage()) {
-      rows.forEach(function (tr) {
-        if (tr.getAttribute("data-infolabsa-processed") === "1") return;
-        if (shouldCheckServerForRow(tr)) {
-          checkRowServerSide(tr);
-        }
-      });
-    }
+    // 3) 🚫 IMPORTANTE: sin helper NO hacemos ninguna llamada por-fila.
+    //    Esto evita los POST /table_lab_analyses/folderitems que te estaban
+    //    causando latencia y errores. Si no hay helper, el script se queda
+    //    con heurísticas locales (sin tocar el detalle de analitos).
   }
 
   var scanAll = debounce(function (root) {
     root = root || document;
+    if (!isSamplesListPage()) return; // seguridad extra
     var totalTables = 0;
     TABLE_SELECTORS.forEach(function (sel) {
       var tables = root.querySelectorAll(sel);
@@ -325,17 +203,19 @@
       Array.prototype.forEach.call(tables, processTable);
     });
     log("scanAll: tablas encontradas=", totalTables);
-  }, 150);
+  }, 120);
 
   // Rescan “seguro” post-pintado
   function rescanSoon() {
+    if (!isSamplesListPage()) return;
     try { requestAnimationFrame(function(){ scanAll(document); }); }
     catch (e) { setTimeout(function(){ scanAll(document); }, 0); }
-    setTimeout(function(){ scanAll(document); }, 300);
-    setTimeout(function(){ scanAll(document); }, 800);
+    setTimeout(function(){ scanAll(document); }, 250);
+    setTimeout(function(){ scanAll(document); }, 700);
   }
 
   var observer = new MutationObserver(function (mutations) {
+    if (!isSamplesListPage()) return;
     var added = 0;
     for (var i = 0; i < mutations.length; i++) {
       var m = mutations[i];
@@ -360,17 +240,16 @@
     try {
       jQuery(document).ajaxComplete(function (_evt, _xhr, settings) {
         var url = (settings && settings.url) || "";
-        log("ajaxComplete:", url);
-        if (/\/folderitems(\?|$)/.test(url)) {
-          log("ajaxComplete: match folderitems → scan + rescans diferidos");
+        // Solo re-escaneamos cuando se renderiza el listado (folderitems) Y estamos en /samples
+        if (isSamplesListPage() && /\/folderitems(\?|$)/.test(url)) {
+          log("ajaxComplete: folderitems @samples → rescan");
           scanAll(document);
           rescanSoon();
-        } else {
-          scanAll(document);
         }
       });
       jQuery(document).on("listing:rendered", function () {
-        log("evento listing:rendered → scan + rescans diferidos");
+        if (!isSamplesListPage()) return;
+        log("evento listing:rendered → rescan");
         scanAll(document);
         rescanSoon();
       });
@@ -379,14 +258,17 @@
   }
 
   function init() {
-    // Sólo actuamos en listados/DOM cargado
     if (!(document && document.body)) return;
-    log("init");
+    if (!isSamplesListPage()) { log("init: fuera de /samples, noop"); return; }
+    log("init @samples");
     scanAll(document);
     rescanSoon();
     startObserver();
     hookAjaxComplete();
-    window.__infolabsa__ = { rescan: function () { scanAll(document); rescanSoon(); }, _debug: { TABLE_SELECTORS: TABLE_SELECTORS } };
+    window.__infolabsa__ = {
+      rescan: function () { if (isSamplesListPage()) { scanAll(document); rescanSoon(); } },
+      _debug: { TABLE_SELECTORS: TABLE_SELECTORS }
+    };
     log("__infolabsa__ listo");
   }
 
