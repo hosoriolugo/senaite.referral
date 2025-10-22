@@ -7,41 +7,47 @@
       interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
       prefix="senaite.referral" />
 
-  <!-- ===== Recursos propios ===== -->
+  <!-- ===== Recurso CSS ===== -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
       prefix="plone.resources/infolabsa-css"
       purge="false">
-    <value key="css">
-      <element>++plone++senaite.referral.static/infolabsa.css</element>
-    </value>
-    <!-- Opcional: declarar dependencias si quieres que cargue después de core -->
+    <!-- OJO: value simple, NO <element> -->
+    <value key="css">++plone++senaite.referral.static/infolabsa.css</value>
     <value key="deps" />
+    <!-- opcionales útiles -->
+    <value key="export">False</value>
+    <value key="enabled">True</value>
   </records>
 
+  <!-- ===== Recurso JS ===== -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
       prefix="plone.resources/infolabsa-js"
       purge="false">
-    <value key="js">
-      <element>++plone++senaite.referral.static/infolabsa.js</element>
-    </value>
-    <!-- Opcional: declarar dependencias si hiciera falta -->
+    <!-- OJO: value simple, NO <element> -->
+    <value key="js">++plone++senaite.referral.static/infolabsa.js</value>
     <value key="deps" />
+    <!-- opcionales útiles -->
+    <value key="export">False</value>
+    <value key="enabled">True</value>
   </records>
 
-  <!-- ===== Bundles de SENAITE: mantener como ya lo tenías ===== -->
+  <!-- ===== Bundle widgets: añadir CSS + JS ===== -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
       prefix="plone.bundles/senaite.core.widgets"
       purge="false">
+    <!-- Aquí sí es tupla => usar <element> -->
     <value key="resources" purge="false">
       <element>infolabsa-css</element>
       <element>infolabsa-js</element>
     </value>
-    <!-- No forzamos compile aquí para no cambiar el comportamiento del sitio -->
+    <value key="enabled">True</value>
+    <value key="compile">False</value>
   </records>
 
+  <!-- ===== Bundle core (cobertura extra) ===== -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
       prefix="plone.bundles/senaite.core"
@@ -50,27 +56,8 @@
       <element>infolabsa-css</element>
       <element>infolabsa-js</element>
     </value>
-  </records>
-
-  <!-- ===== Cobertura extra (Plone global): default + logged-in ===== -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
-      prefix="plone.bundles/default"
-      purge="false">
-    <value key="resources" purge="false">
-      <element>infolabsa-css</element>
-      <element>infolabsa-js</element>
-    </value>
-  </records>
-
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
-      prefix="plone.bundles/logged-in"
-      purge="false">
-    <value key="resources" purge="false">
-      <element>infolabsa-css</element>
-      <element>infolabsa-js</element>
-    </value>
+    <value key="enabled">True</value>
+    <value key="compile">False</value>
   </records>
 
 </registry>
