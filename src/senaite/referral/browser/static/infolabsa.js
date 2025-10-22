@@ -72,8 +72,8 @@
   try { enabled = localStorage.getItem("infolabsa.enabled") === "1"; } catch (_e) { enabled = false; }
   if (!enabled) return;
 
-  // ====== (Opcional) Lógica mínima y pasiva cuando SÍ esté activado ======
-  // Sin observers ni hooks AJAX: una sola lectura del DOM en /samples.
+  // ====== Lógica pasiva cuando SÍ esté activado (sin observers/HOOKs AJAX) ======
+  // Una sola lectura del DOM en /samples.
   var TABLE_SELECTORS = [
     "table.listing",
     "table.listing-table",
@@ -82,11 +82,26 @@
     ".app-listing table"
   ];
 
+  // Patrones de texto habituales para OOR
   var OOR_TEXT_PATTERNS = [
-    "fuera de rango", "out of range", "oor", "range violation", "out-of-range"
+    "fuera de rango", "out of range", "out-of-range", "oor",
+    "fuera del rango", "range violation", "range_violation",
+    "alerta crítica", "crítico", "critical", "panic", "panic high", "panic low"
   ];
-  var OOR_ICON_HINTS = ["exclamation", "warning", "exclamation_red.svg", "warning.svg"];
 
+  // Recursos/íconos que delatan alerta
+  var OOR_ICON_HINTS = [
+    "exclamation", "warning", "alert", "triangle",
+    "exclamation_red.svg", "warning.svg", "icon-alert", "fa-exclamation"
+  ];
+
+  // Clases comunes usadas para marcar fuera de rango/alertas
+  var OOR_CLASS_HINTS = [
+    "fr-alert", "al-critical", "al-delta", "out-of-range", "range-violation",
+    "state-oor", "state-outofrange", "is-oor", "has-oor"
+  ];
+
+  // Estados de revisión relevantes (filtra filas realmente "vivas")
   var SAMPLE_REVIEW_STATES_TO_CHECK = [
     "to_be_verified", "por verificar", "pendiente de verificar",
     "pending verification", "verified", "verificada", "verificado"
@@ -105,29 +120,6 @@
     } catch(e){ log("markRow err", e); }
   }
 
-  function rowLooksOOR(tr){
-    try{
-      if (tr.classList.contains("row-flag-alert") || tr.getAttribute("data-row-alert")==="1") return true;
-      if (tr.getAttribute("data-has-oor")==="1" || tr.querySelector('[data-oor="1"]')) return true;
-
-      var imgs = tr.querySelectorAll("img, svg, use");
-      for (var i=0;i<imgs.length;i++){
-        var el = imgs[i];
-        var src = (el.getAttribute("src") || el.getAttribute("href") || "").toLowerCase();
-        var alt = (el.getAttribute("alt") || el.getAttribute("title") || "").toLowerCase();
-        for (var j=0;j<OOR_ICON_HINTS.length;j++){
-          var k = OOR_ICON_HINTS[j];
-          if (src.indexOf(k)>-1 || alt.indexOf(k)>-1) return true;
-        }
-      }
-      var text = (tr.innerText || "").toLowerCase();
-      for (var t=0;t<OOR_TEXT_PATTERNS.length;t++){
-        if (text.indexOf(OOR_TEXT_PATTERNS[t])>-1) return true;
-      }
-    } catch(e){ log("rowLooksOOR err", e); }
-    return false;
-  }
-
   function rowStateRelevant(tr){
     try{
       var text = (tr.innerText || "").toLowerCase();
@@ -135,6 +127,54 @@
         if (text.indexOf(SAMPLE_REVIEW_STATES_TO_CHECK[i])>-1) return true;
       }
     } catch(_e){}
+    return false;
+  }
+
+  // Detección robusta de "fuera de rango" SOLO en la fila/celdas
+  function rowLooksOOR(tr, tbl){
+    try{
+      if (tr.classList.contains("row-flag-alert") || tr.getAttribute("data-row-alert")==="1") return true;
+      if (tr.getAttribute("data-has-oor")==="1" || tr.querySelector('[data-oor="1"]')) return true;
+
+      // 1) Clases de alerta en la propia fila o en sus celdas
+      for (var c=0; c<OOR_CLASS_HINTS.length; c++){
+        var cls = OOR_CLASS_HINTS[c];
+        if (tr.classList.contains(cls)) return true;
+        if (tr.querySelector("td."+cls+", td ."+cls+' , td [class*="'+cls+'"]')) return true;
+      }
+
+      // 2) Íconos dentro de la fila
+      var imgs = tr.querySelectorAll("td img, td svg, td use");
+      for (var i=0;i<imgs.length;i++){
+        var el = imgs[i];
+        var src = (el.getAttribute("src") || el.getAttribute("href") || "").toLowerCase();
+        var alt = (el.getAttribute("alt") || el.getAttribute("title") || "").toLowerCase();
+        for (var j=0;j<OOR_ICON_HINTS.length;j++){
+          var k = OOR_ICON_HINTS[j];
+          if ((src && src.indexOf(k)>-1) || (alt && alt.indexOf(k)>-1)) return true;
+        }
+      }
+
+      // 3) Texto SOLO de las celdas de la fila
+      var cells = tr.querySelectorAll("td");
+      for (var t=0;t<OOR_TEXT_PATTERNS.length;t++){
+        var pat = OOR_TEXT_PATTERNS[t];
+        for (var k=0;k<cells.length;k++){
+          var tx = (cells[k].innerText || "").toLowerCase();
+          if (tx.indexOf(pat)>-1) return true;
+        }
+      }
+
+      // 4) Columnas típicas de "estado" o "alerta"
+      var likely = tr.querySelector('td[class*="state"], td[class*="status"], td[class*="alert"], td[class*="range"]');
+      if (likely){
+        var ltxt = (likely.innerText || "").toLowerCase();
+        for (var t2=0;t2<OOR_TEXT_PATTERNS.length;t2++){
+          if (ltxt.indexOf(OOR_TEXT_PATTERNS[t2])>-1) return true;
+        }
+        if (likely.querySelector('[data-oor="1"], .out-of-range, .fr-alert, .al-critical')) return true;
+      }
+    } catch(e){ log("rowLooksOOR err", e); }
     return false;
   }
 
@@ -146,8 +186,9 @@
     for (var i=0;i<rows.length;i++){
       var tr = rows[i];
       if (tr.getAttribute("data-infolabsa-processed")==="1") continue;
+      // Solo evaluamos filas "de datos" con estados relevantes
       if (!rowStateRelevant(tr)) { tr.setAttribute("data-infolabsa-processed","1"); continue; }
-      if (rowLooksOOR(tr)) { markRow(tr); marked++; }
+      if (rowLooksOOR(tr, tbl)) { markRow(tr); marked++; }
       else { tr.setAttribute("data-infolabsa-processed","1"); }
     }
     log("processTable: filas=", rows.length, "marcadas=", marked);
@@ -173,7 +214,7 @@
     if (!isSamplesListPage()) { log("init: fuera de /samples (noop)"); return; }
     log("init @samples (enabled, modo seguro sin observers)");
     // una sola pasada, con pequeño delay para permitir que la tabla exista
-    setTimeout(function(){ safe(function(){ scanAll(document); }); }, 50);
+    setTimeout(function(){ safe(function(){ scanAll(document); }); }, 100);
     // rescan manual por consola, si lo necesitas
     window.__infolabsa__.rescan = function(){ if (isSamplesListPage()) scanAll(document); };
   }
