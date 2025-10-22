@@ -1,39 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<registry xmlns:i18n="http://xml.zope.org/namespaces/i18n"
-          i18n:domain="senaite.referral">
+<registry xmlns:i18n="http://xml.zope.org/namespaces/i18n" i18n:domain="senaite.referral">
 
   <!-- Control Panel (sin cambios) -->
-  <records
-      interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
-      prefix="senaite.referral" />
+  <records interface="senaite.referral.browser.controlpanel.IReferralControlPanel" prefix="senaite.referral" />
 
-  <!-- Recurso CSS (forma segura con <element>) -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
-      prefix="plone.resources/infolabsa-css"
-      purge="false">
-    <value key="css">
-      <element>++plone++senaite.referral.static/infolabsa.css</element>
-    </value>
+  <!-- Recurso CSS -->
+  <records interface="Products.CMFPlone.interfaces.resources.IResourceRegistry" prefix="plone.resources/infolabsa-css" purge="false">
+    <value key="css"><element>++plone++senaite.referral.static/infolabsa.css</element></value>
     <value key="deps" />
   </records>
 
-  <!-- Recurso JS (forma segura con <element>) -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
-      prefix="plone.resources/infolabsa-js"
-      purge="false">
-    <value key="js">
-      <element>++plone++senaite.referral.static/infolabsa.js</element>
-    </value>
+  <!-- Recurso JS -->
+  <records interface="Products.CMFPlone.interfaces.resources.IResourceRegistry" prefix="plone.resources/infolabsa-js" purge="false">
+    <value key="js"><element>++plone++senaite.referral.static/infolabsa.js</element></value>
     <value key="deps" />
   </records>
 
-  <!-- Bundle widgets: añadir CSS + JS -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
-      prefix="plone.bundles/senaite.core.widgets"
-      purge="false">
+  <!-- Bundle widgets -->
+  <records interface="Products.CMFPlone.interfaces.resources.IBundleRegistry" prefix="plone.bundles/senaite.core.widgets" purge="false">
     <value key="resources" purge="false">
       <element>infolabsa-css</element>
       <element>infolabsa-js</element>
@@ -43,10 +27,7 @@
   </records>
 
   <!-- Bundle core (cobertura extra) -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
-      prefix="plone.bundles/senaite.core"
-      purge="false">
+  <records interface="Products.CMFPlone.interfaces.resources.IBundleRegistry" prefix="plone.bundles/senaite.core" purge="false">
     <value key="resources" purge="false">
       <element>infolabsa-css</element>
       <element>infolabsa-js</element>
