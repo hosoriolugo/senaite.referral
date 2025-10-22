@@ -1,11 +1,11 @@
-/* Sombreado rojo tenue permanente para filas con analitos fuera de rango */
+/* Sombreado rojo más notorio para filas con analitos fuera de rango (solo listados) */
 
 /* Cubrir los tipos de tablas usados por SENAITE */
 table.listing tbody tr.row-flag-alert,
 table.listing-table tbody tr.row-flag-alert,
 table#listing tbody tr.row-flag-alert,
 table.table tbody tr.row-flag-alert {
-  background-color: #fff1f0 !important; /* rojo muy suave */
+  background-color: #ffe5e3 !important; /* rojo suave, más visible que #fff1f0 */
 }
 
 /* Pintar también las celdas (algunos temas aplican fondo en <td>, no en <tr>) */
@@ -13,49 +13,55 @@ table.listing tbody tr.row-flag-alert > td,
 table.listing-table tbody tr.row-flag-alert > td,
 table#listing tbody tr.row-flag-alert > td,
 table.table tbody tr.row-flag-alert > td {
-  background-color: #fff1f0 !important;
-  border-top-color: #ffd1ce !important; /* sutil separación */
+  background-color: #ffe5e3 !important;
+  border-top-color: #ffbdb8 !important; /* sutil separación */
 }
 
 /* Soporte alterno: si el adapter añade data-row-alert="1" */
 tr[data-row-alert="1"],
 tr[data-row-alert="1"] > td {
-  background-color: #fff1f0 !important;
-  border-top-color: #ffd1ce !important;
+  background-color: #ffe5e3 !important;
+  border-top-color: #ffbdb8 !important;
 }
 
-/* ======== AJUSTES DE COMPATIBILIDAD (añadidos) ======== */
+/* ======== AJUSTES DE COMPATIBILIDAD ======== */
 
 /* DataTables/Listing de SENAITE: asegurar el mismo fondo */
 table.dataTable tbody tr.row-flag-alert,
 table.dataTable tbody tr.row-flag-alert > td {
-  background-color: #fff1f0 !important;
-  border-top-color: #ffd1ce !important;
+  background-color: #ffe5e3 !important;
+  border-top-color: #ffbdb8 !important;
 }
 
 /* Zebra (.table-striped) y hover (.table-hover): mantener la alerta visible */
 table.table-striped tbody tr.row-flag-alert,
 table.table-hover tbody tr.row-flag-alert:hover,
 table.table-hover tbody tr.row-flag-alert:hover > td {
-  background-color: #fff1f0 !important;
+  background-color: #ffe5e3 !important;
+}
+
+/* Aún con zebra odd/even, forzar el mismo rojo en la fila marcada */
+table.table-striped tbody tr.row-flag-alert:nth-of-type(odd) > td,
+table.table-striped tbody tr.row-flag-alert:nth-of-type(even) > td {
+  background-color: #ffe5e3 !important;
 }
 
 /* Cuando hay selección de fila (algunos temas usan .selected) mantener color y resaltar borde */
 tbody tr.row-flag-alert.selected > td,
 tbody tr.row-flag-alert.is-selected > td {
-  background-color: #ffe9e7 !important; /* un pelín más marcado en selección */
-  box-shadow: inset 0 0 0 2px #ffb8b2;   /* contorno suave para indicar selección */
+  background-color: #ffd6d3 !important; /* un pelín más marcado en selección */
+  box-shadow: inset 0 0 0 2px #ffb3ae;   /* contorno suave para indicar selección */
 }
 
-/* Acento sutil para visibilidad (borde interno en la primera celda) */
+/* ✅ Mantener el borde izquierdo tal como lo tenías */
 tbody tr.row-flag-alert > td:first-child,
 tbody tr[data-row-alert="1"] > td:first-child {
-  box-shadow: inset 4px 0 0 #ffb3ad; /* línea vertical suave */
+  box-shadow: inset 4px 0 0 #ffb3ad; /* línea vertical suave (sin cambios) */
 }
 
 /* Si el tema pinta hover por <td>, forzamos coherencia */
 tbody tr.row-flag-alert > td:hover {
-  background-color: #ffe9e7 !important;
+  background-color: #ffd6d3 !important;
 }
 
 /* Impresión: conservar el marcado en reportes impresos */
@@ -64,11 +70,11 @@ tbody tr.row-flag-alert > td:hover {
   tr.row-flag-alert > td,
   tr[data-row-alert="1"],
   tr[data-row-alert="1"] > td {
-    background-color: #fff1f0 !important;
+    background-color: #ffe5e3 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 }
 
-/* 🔹 Ocultar el marcador oculto que inyecta el adapter */
+/* 🔹 Ocultar el marcador oculto que inyecta el adapter (si existiera) */
 .oob-flag { display: none !important; }
