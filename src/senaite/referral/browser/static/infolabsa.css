@@ -4,7 +4,9 @@
 table.listing tbody tr.row-flag-alert,
 table.listing-table tbody tr.row-flag-alert,
 table#listing tbody tr.row-flag-alert,
-table.table tbody tr.row-flag-alert {
+table.table tbody tr.row-flag-alert,
+#content table.listing tbody tr.row-flag-alert,
+#content-core table.listing tbody tr.row-flag-alert {
   background-color: #ffe5e3 !important; /* rojo suave, más visible que #fff1f0 */
 }
 
@@ -12,7 +14,9 @@ table.table tbody tr.row-flag-alert {
 table.listing tbody tr.row-flag-alert > td,
 table.listing-table tbody tr.row-flag-alert > td,
 table#listing tbody tr.row-flag-alert > td,
-table.table tbody tr.row-flag-alert > td {
+table.table tbody tr.row-flag-alert > td,
+#content table.listing tbody tr.row-flag-alert > td,
+#content-core table.listing tbody tr.row-flag-alert > td {
   background-color: #ffe5e3 !important;
   border-top-color: #ffbdb8 !important; /* sutil separación */
 }
@@ -81,5 +85,10 @@ tbody tr.row-flag-alert > td:hover {
 
 /* Refuerzo extra contra selectores muy específicos de Bootstrap */
 .table.table-striped > tbody > tr.row-flag-alert > td {
+  background-color: #ffe5e3 !important;
+}
+
+/* Extra: algunas vistas aplican el fondo en celdas con .sorting_1 (DataTables) */
+table.dataTable tbody tr.row-flag-alert > td.sorting_1 {
   background-color: #ffe5e3 !important;
 }
