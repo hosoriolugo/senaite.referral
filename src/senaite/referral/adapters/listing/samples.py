@@ -230,7 +230,8 @@ class SamplesListingViewAdapter(object):
                         if analyses_objs:
                             break
 
-            # C) Catálogo: varias llaves + filtros por índices OOR si existen
+            # C) Catálogo: primero una consulta EXACTA como en el detalle,
+            #    luego fallbacks con llaves alternativas e índices OOR
             if not any_oof and not analyses_objs:
                 ac = None
                 try:
@@ -243,26 +244,57 @@ class SamplesListingViewAdapter(object):
                         ac = None
 
                 brains = []
-                qkeys = (
-                    {"getRequestUID": uid},
-                    {"getAnalysisRequestUID": uid},
-                    {"getSampleUID": uid},
-                    {"getAncestorsUIDs": [uid]},
-                )
-                bool_filters = (
-                    {"result_out_of_range": True},
-                    {"out_of_range": True},
-                    {"has_out_of_range": True},
-                )
 
-                def extend_brains(catalog, base):
-                    seen = set()
-                    # primero con filtros OOR (si los índices existen)
-                    for extra in bool_filters:
+                # --- C1) Consulta 1: EXACTA (igual a LabAnalysesTable) ---
+                if ac is not None:
+                    try:
+                        brains = ac(
+                            portal_type="Analysis",
+                            getAncestorsUIDs=[uid],
+                            getPointOfCapture="lab",
+                            sort_on="sortable_title",
+                            sort_order="ascending",
+                            review_state=[
+                                "registered", "unassigned", "assigned",
+                                "to_be_verified", "verified", "published", "referred",
+                            ],
+                        )
+                    except Exception:
+                        brains = []
+
+                # --- C2) Si sigue vacío, usar llaves alternativas + índices OOR ---
+                if not brains:
+                    qkeys = (
+                        {"getAncestorsUIDs": [uid]},
+                        {"getRequestUID": uid},
+                        {"getAnalysisRequestUID": uid},
+                        {"getSampleUID": uid},
+                    )
+                    bool_filters = (
+                        {"result_out_of_range": True},
+                        {"out_of_range": True},
+                        {"has_out_of_range": True},
+                    )
+
+                    def extend_brains(catalog, base):
+                        seen = set()
+                        # primero con filtros OOR (si el índice existe)
+                        for extra in bool_filters:
+                            for q in qkeys:
+                                qq = base.copy()
+                                qq.update(q)
+                                qq.update(extra)
+                                try:
+                                    for b in catalog(**qq):
+                                        if b.UID not in seen:
+                                            brains.append(b)
+                                            seen.add(b.UID)
+                                except Exception:
+                                    pass
+                        # luego sin filtros (compatibilidad)
                         for q in qkeys:
                             qq = base.copy()
                             qq.update(q)
-                            qq.update(extra)
                             try:
                                 for b in catalog(**qq):
                                     if b.UID not in seen:
@@ -270,32 +302,24 @@ class SamplesListingViewAdapter(object):
                                         seen.add(b.UID)
                             except Exception:
                                 pass
-                    # luego sin filtros (compatibilidad)
-                    for q in qkeys:
-                        qq = base.copy()
-                        qq.update(q)
+
+                    if ac is not None:
+                        extend_brains(ac, {
+                            "portal_type": "Analysis",
+                            "sort_on": "sortable_title",
+                            "sort_order": "ascending",
+                        })
+
+                    # Fallback final con portal_catalog
+                    if not brains:
                         try:
-                            for b in catalog(**qq):
-                                if b.UID not in seen:
-                                    brains.append(b)
-                                    seen.add(b.UID)
+                            pc = getToolByName(self.context, "portal_catalog")
+                            extend_brains(pc, {"portal_type": "Analysis"})
                         except Exception:
                             pass
 
-                if ac is not None:
-                    extend_brains(ac, {
-                        "portal_type": "Analysis",
-                        "sort_on": "sortable_title",
-                        "sort_order": "ascending",
-                    })
-                if not brains:
-                    try:
-                        pc = getToolByName(self.context, "portal_catalog")
-                        extend_brains(pc, {"portal_type": "Analysis"})
-                    except Exception:
-                        pass
-
-                for b in brains:
+                # Convertir brains a objetos
+                for b in brains or []:
                     try:
                         a = b.getObject()
                     except Exception:
