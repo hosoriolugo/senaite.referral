@@ -7,37 +7,45 @@
       interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
       prefix="senaite.referral" />
 
-  <!-- ============ RECURSO: JS + CSS ============ -->
-  <!-- Define un recurso "infolabsa" que incluye ambos ficheros -->
+  <!-- ===== Recurso CSS (igual al que ya tenías) ===== -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
-      prefix="plone.resources/infolabsa"
+      prefix="plone.resources/infolabsa-css"
       purge="false">
-    <value key="js">
-      <element>++plone++senaite.referral.static/infolabsa.js</element>
-    </value>
-    <value key="css">
-      <element>++plone++senaite.referral.static/infolabsa.css</element>
-    </value>
-    <!-- sin dependencias explícitas -->
+    <value key="css"><element>++plone++senaite.referral.static/infolabsa.css</element></value>
     <value key="deps" />
-    <!-- opcional, útil en desarrollo -->
-    <value key="export">False</value>
-    <value key="compile">False</value>
-    <value key="enabled">True</value>
-    <value key="conditionalcomment"></value>
-    <value key="expression"></value>
-    <value key="merge_with">None</value>
   </records>
 
-  <!-- ============ AÑADIR A UN BUNDLE CARGADO EN LISTADOS ============ -->
-  <!-- Usamos senaite.core.widgets (se carga en Listings y vistas con widgets) -->
+  <!-- ===== Recurso JS (nuevo) ===== -->
+  <records
+      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
+      prefix="plone.resources/infolabsa-js"
+      purge="false">
+    <value key="js"><element>++plone++senaite.referral.static/infolabsa.js</element></value>
+    <value key="deps" />
+  </records>
+
+  <!-- ===== Bundle widgets: añadir CSS + JS ===== -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
       prefix="plone.bundles/senaite.core.widgets"
       purge="false">
     <value key="resources" purge="false">
-      <element>infolabsa</element>
+      <element>infolabsa-css</element>
+      <element>infolabsa-js</element>
+    </value>
+    <value key="enabled">True</value>
+    <value key="compile">False</value>
+  </records>
+
+  <!-- ===== Bundle core (plan B / cobertura extra) ===== -->
+  <records
+      interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
+      prefix="plone.bundles/senaite.core"
+      purge="false">
+    <value key="resources" purge="false">
+      <element>infolabsa-css</element>
+      <element>infolabsa-js</element>
     </value>
     <value key="enabled">True</value>
     <value key="compile">False</value>
