@@ -12,7 +12,9 @@
       interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
       prefix="plone.resources/infolabsa-css"
       purge="false">
-    <value key="css">++plone++senaite.referral.static/infolabsa.css</value>
+    <value key="css">
+      <element>++plone++senaite.referral.static/infolabsa.css</element>
+    </value>
     <value key="deps" />
   </records>
 
@@ -21,7 +23,9 @@
       interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
       prefix="plone.resources/infolabsa-js"
       purge="false">
-    <value key="js">++plone++senaite.referral.static/infolabsa.js</value>
+    <value key="js">
+      <element>++plone++senaite.referral.static/infolabsa.js</element>
+    </value>
     <value key="deps" />
   </records>
 
