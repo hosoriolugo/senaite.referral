@@ -78,3 +78,8 @@ tbody tr.row-flag-alert > td:hover {
 
 /* 🔹 Ocultar el marcador oculto que inyecta el adapter (si existiera) */
 .oob-flag { display: none !important; }
+
+/* Refuerzo extra contra selectores muy específicos de Bootstrap */
+.table.table-striped > tbody > tr.row-flag-alert > td {
+  background-color: #ffe5e3 !important;
+}
