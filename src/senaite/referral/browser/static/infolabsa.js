@@ -1,4 +1,13 @@
 /* eslint-disable no-console */
+/*!
+ * infolabsa.js — versión segura (sin observers ni hooks AJAX)
+ * - Desactivado por defecto: no hace nada salvo exponer enable()/disable()
+ * - No usa MutationObserver ni ajaxComplete (evita bucles y sobrecarga)
+ * - Solo hace un escaneo pasivo una vez al cargar /samples
+ *
+ * Activar:   localStorage.setItem("infolabsa.enabled","1"); location.reload();
+ * Desactivar:localStorage.removeItem("infolabsa.enabled");  location.reload();
+ */
 (function () {
   "use strict";
 
@@ -7,25 +16,29 @@
     try { return localStorage.getItem("infolabsa.enabled") === "1"; }
     catch (e) { return false; }
   }
-  if (!isEnabled()) {
-    // Exponemos un pequeño control para que puedas activarlo sin reinstalar
-    window.__infolabsa__ = {
-      enable: function(){ try { localStorage.setItem("infolabsa.enabled","1"); location.reload(); } catch(e){} },
-      disable: function(){ try { localStorage.removeItem("infolabsa.enabled"); location.reload(); } catch(e){} }
-    };
-    return; // 🚫 No hacemos nada si está deshabilitado
-  }
+  // Expón controles siempre, pero no ejecutes lógica si está desactivado
+  window.__infolabsa__ = {
+    enable: function(){
+      try { localStorage.setItem("infolabsa.enabled","1"); location.reload(); } catch(e){}
+    },
+    disable: function(){
+      try { localStorage.removeItem("infolabsa.enabled"); location.reload(); } catch(e){}
+    },
+    // para pruebas manuales en consola
+    rescan: function(){ /* no-op hasta que esté activado */ }
+  };
+  if (!isEnabled()) return;
 
-  // ====== CONFIG ======
+  // ====== CONFIG (conservador) ======
   var TABLE_SELECTORS = [
     "table.listing",
     "table.listing-table",
     "table#listing",
-    "table.table",
     ".listing-app table",
     ".app-listing table"
   ];
 
+  // Patrones muy simples para “fuera de rango”
   var OOR_TEXT_PATTERNS = [
     "fuera de rango",
     "out of range",
@@ -35,10 +48,15 @@
   ];
   var OOR_ICON_HINTS = ["exclamation", "warning", "exclamation_red.svg", "warning.svg"];
 
-  // Estados relevantes (pendiente y verificada)
+  // Estados relevantes de muestra (solo español/inglés más comunes)
   var SAMPLE_REVIEW_STATES_TO_CHECK = [
-    "to_be_verified", "por verificar", "pendiente de verificar", "pending verification",
-    "verified", "verificada", "verificadas", "verificado"
+    "to_be_verified",
+    "por verificar",
+    "pendiente de verificar",
+    "pending verification",
+    "verified",
+    "verificada",
+    "verificado"
   ];
 
   // ====== UTILS ======
@@ -46,7 +64,6 @@
     try { return localStorage.getItem("infolabsa.debug") === "1"; } catch (e) { return false; }
   }
   function log(){ if(isDebug()) { var a=[].slice.call(arguments); a.unshift("[infolabsa]"); try{console.log.apply(console,a);}catch(e){} } }
-  function debounce(fn, wait){ var t; return function(){ var ctx=this, args=arguments; clearTimeout(t); t=setTimeout(function(){ try{fn.apply(ctx,args);}catch(e){log("debounce err",e);} }, wait); }; }
   function safe(fn){ try { fn(); } catch(e){ log("safe err", e); } }
 
   function isSamplesListPage() {
@@ -97,11 +114,9 @@
     return false;
   }
 
-  // ====== Núcleo (solo DOM, cero AJAX) ======
+  // ====== Núcleo (solo DOM, cero AJAX, una sola pasada) ======
   function processTable(tbl){
     if (!tbl) return;
-    if (!isSamplesListPage()) return;
-
     var tbody = tbl.tBodies && tbl.tBodies[0];
     if (!tbody) return;
 
@@ -113,10 +128,8 @@
       var tr = rows[i];
       if (tr.getAttribute("data-infolabsa-processed")==="1") continue;
 
-      // Solo nos interesa si el estado de la muestra es relevante
       if (!rowStateRelevant(tr)) { tr.setAttribute("data-infolabsa-processed","1"); continue; }
 
-      // Heurística local (iconos/texto en la fila) → sin tocar analitos
       if (rowLooksOOR(tr)) {
         markRow(tr);
         marked++;
@@ -127,7 +140,7 @@
     log("processTable: filas=", rows.length, "marcadas=", marked);
   }
 
-  var scanAll = debounce(function(root){
+  function scanAll(root){
     if (!isSamplesListPage()) return;
     root = root || document;
     var totalTables = 0;
@@ -135,69 +148,21 @@
       var sel = TABLE_SELECTORS[s];
       var tables = root.querySelectorAll(sel);
       totalTables += tables.length;
-      for (var i=0;i<tables.length;i++) safe(function(){ processTable(tables[i]); });
+      for (var i=0;i<tables.length;i++) safe(function(tbl){ return function(){ processTable(tbl); }; }(tables[i]));
     }
     log("scanAll: tablas=", totalTables);
-  }, 120);
-
-  function rescanSoon(){
-    if (!isSamplesListPage()) return;
-    try { requestAnimationFrame(function(){ scanAll(document); }); } catch(e){ setTimeout(function(){ scanAll(document); },0); }
-    setTimeout(function(){ scanAll(document); }, 250);
-    setTimeout(function(){ scanAll(document); }, 700);
-  }
-
-  function startObserver(){
-    try{
-      var observer = new MutationObserver(function(muts){
-        if (!isSamplesListPage()) return;
-        var added=0;
-        for (var i=0;i<muts.length;i++){
-          var m = muts[i];
-          if (m.addedNodes && m.addedNodes.length) added += m.addedNodes.length;
-        }
-        if (added){
-          log("observer added=", added);
-          scanAll(document);
-          rescanSoon();
-        }
-      });
-      observer.observe(document.documentElement || document.body, { childList:true, subtree:true });
-      log("observer: iniciado");
-    }catch(e){ log("observer err",e); }
-  }
-
-  function hookAjaxComplete(){
-    if (!window.jQuery) { log("ajax hook: jQuery no disponible"); return; }
-    try{
-      jQuery(document).ajaxComplete(function(_evt,_xhr,settings){
-        var url = (settings && settings.url) || "";
-        if (isSamplesListPage() && /\/folderitems(\?|$)/.test(url)) {
-          log("ajaxComplete: folderitems @samples");
-          scanAll(document);
-          rescanSoon();
-        }
-      });
-      jQuery(document).on("listing:rendered", function(){
-        if (!isSamplesListPage()) return;
-        log("listing:rendered");
-        scanAll(document);
-        rescanSoon();
-      });
-      log("ajax hook: listo");
-    }catch(e){ log("ajax hook err",e); }
   }
 
   function init(){
     if (!(document && document.body)) return;
     if (!isSamplesListPage()) { log("init: fuera de /samples (noop)"); return; }
-    log("init @samples (enabled)");
-    scanAll(document);
-    rescanSoon();
-    startObserver();
-    hookAjaxComplete();
-    window.__infolabsa__ = window.__infolabsa__ || {};
-    window.__infolabsa__.rescan = function(){ if (isSamplesListPage()) { scanAll(document); rescanSoon(); } };
+    log("init @samples (enabled, modo seguro)");
+    // ÚNICA pasada: no se re-engancha a nada
+    // pequeño deferral para dejar que la tabla esté en el DOM
+    setTimeout(function(){ safe(function(){ scanAll(document); }); }, 50);
+
+    // expón rescan manual, por si el usuario quiere forzarlo en consola:
+    window.__infolabsa__.rescan = function(){ if (isSamplesListPage()) { scanAll(document); } };
   }
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
