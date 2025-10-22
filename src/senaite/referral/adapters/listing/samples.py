@@ -157,32 +157,60 @@ class SamplesListingViewAdapter(object):
 
         # === INFOLABSA: sombrear fila si existe al menos un analito fuera de rango ===
         try:
-            pc = getToolByName(self.context, "portal_catalog")
             uid = api.get_uid(obj)
 
-            # Analyses del AR
-            brains = pc(portal_type="Analysis", getRequestUID=uid)
+            # Preferir el catálogo de análisis real de SENAITE (según logs: senaite_catalog_analysis)
+            try:
+                from senaite.core.catalog import ANALYSIS_CATALOG  # nombre del tool
+                ac = api.get_tool(ANALYSIS_CATALOG)  # "senaite_catalog_analysis"
+            except Exception:
+                ac = None
+
+            brains = []
+            if ac is not None:
+                # Igual que en los logs del sistema: filtro por getAncestorsUIDs
+                brains = ac(
+                    portal_type="Analysis",
+                    getAncestorsUIDs=[uid],
+                    sort_on="sortable_title",
+                    sort_order="ascending",
+                )
+
+            # Fallback: portal_catalog con los índices clásicos (por compatibilidad)
             if not brains:
-                brains = pc(portal_type="Analysis", getAnalysisRequestUID=uid)
+                pc = getToolByName(self.context, "portal_catalog")
+                brains = pc(portal_type="Analysis", getRequestUID=uid)
+                if not brains:
+                    brains = pc(portal_type="Analysis", getAnalysisRequestUID=uid)
 
             any_oof = False
             for b in brains:
-                a = b.getObject()  # rendimiento ok para listados
+                try:
+                    a = b.getObject()  # OK para tamaños de listado típicos
+                except Exception:
+                    continue
                 if _analysis_is_oof(a):
                     any_oof = True
                     break
 
             if any_oof:
-                # 1) Intenta añadir clase a la fila (por compatibilidad con varios renderers)
+                # 1) Añadir clase de fila (cubrir distintas claves usadas por el renderer)
                 for key in ("class", "state_class", "row_class", "review_state_class", "table_row_class"):
                     cur = item.get(key) or u""
                     item[key] = (cur + u" row-flag-alert").strip()
 
-                # 2) Inyecta SIEMPRE un marcador oculto en una celda, para que el JS lo detecte
+                # 2) Inyectar SIEMPRE un marcador oculto que el JS reconoce
                 item.setdefault("after", {})
-                prev = item["after"].get("getId", "")
-                marker = u'<span class="oob-flag" data-oor="1"></span>'
+                prev = item["after"].get("getId", u"")
+                marker = u'<span class="oob-flag" data-oor="1" title="OOR"></span>'
                 item["after"]["getId"] = u" ".join(filter(None, [prev, marker]))
+
+                # 3) Plan B visual inline por si el CSS no cargara (no interfiere con estilos)
+                item.setdefault("before", {})
+                pre = item["before"].get("getId", u"")
+                badge = (u'<span style="display:inline-block;width:4px;height:1em;'
+                         u'background:#ffb3ad;margin-right:4px;vertical-align:middle;"></span>')
+                item["before"]["getId"] = u" ".join(filter(None, [badge, pre]))
         except Exception:
             # Nunca romper el listado por un fallo de chequeo
             pass
