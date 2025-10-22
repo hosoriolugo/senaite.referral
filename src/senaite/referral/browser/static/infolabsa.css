@@ -142,3 +142,29 @@ tbody tr.row-flag-alert td.getId,
     color: #ffd7d4;
   }
 }
+
+/* === Fallback extra ===
+   Si por algún motivo la fila NO recibe la clase .row-flag-alert,
+   pero el adapter inyecta el marcador oculto .oob-flag[data-oor="1"]
+   dentro de alguna celda, pintamos la fila usando :has().
+   (Funciona en Chrome/Edge/Safari y Firefox 121+) */
+.contentstable tbody tr:has(.oob-flag[data-oor="1"]),
+.contentstable tbody tr:has(.oob-flag[data-oor="1"]) > td,
+table.table tbody tr:has(.oob-flag[data-oor="1"]),
+table.table tbody tr:has(.oob-flag[data-oor="1"]) > td {
+  background-color: #ffe5e3 !important;
+  border-top-color: #ffbdb8 !important;
+}
+
+/* Mantener la línea izquierda con el fallback :has() */
+.contentstable tbody tr:has(.oob-flag[data-oor="1"]) > td:first-child,
+table.table tbody tr:has(.oob-flag[data-oor="1"]) > td:first-child {
+  box-shadow: inset 4px 0 0 #ffb3ad;
+}
+
+/* Refuerzo de especificidad para el atributo data-row-alert en contentstable */
+.contentstable tbody tr[data-row-alert="1"],
+.contentstable tbody tr[data-row-alert="1"] > td {
+  background-color: #ffe5e3 !important;
+  border-top-color: #ffbdb8 !important;
+}
