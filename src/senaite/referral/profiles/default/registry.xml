@@ -7,41 +7,37 @@
       interface="senaite.referral.browser.controlpanel.IReferralControlPanel"
       prefix="senaite.referral" />
 
-  <!-- ============ RESOURCES ============ -->
-
-  <!-- CSS existente -->
+  <!-- ============ RECURSO: JS + CSS ============ -->
+  <!-- Define un recurso "infolabsa" que incluye ambos ficheros -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
-      prefix="plone.resources/infolabsa-css"
-      purge="false">
-    <value key="css">
-      <element>++plone++senaite.referral.static/infolabsa.css</element>
-    </value>
-    <value key="deps" />
-  </records>
-
-  <!-- 🔹 NUEVO: JS para detectar/repintar filas OOR -->
-  <records
-      interface="Products.CMFPlone.interfaces.resources.IResourceRegistry"
-      prefix="plone.resources/infolabsa-js"
+      prefix="plone.resources/infolabsa"
       purge="false">
     <value key="js">
       <element>++plone++senaite.referral.static/infolabsa.js</element>
     </value>
-    <!-- jQuery ya viene del bundle; no declaramos deps -->
+    <value key="css">
+      <element>++plone++senaite.referral.static/infolabsa.css</element>
+    </value>
+    <!-- sin dependencias explícitas -->
     <value key="deps" />
+    <!-- opcional, útil en desarrollo -->
+    <value key="export">False</value>
+    <value key="compile">False</value>
+    <value key="enabled">True</value>
+    <value key="conditionalcomment"></value>
+    <value key="expression"></value>
+    <value key="merge_with">None</value>
   </records>
 
-  <!-- ============ BUNDLE: SENAITE.CORE ============ -->
+  <!-- ============ AÑADIR A UN BUNDLE CARGADO EN LISTADOS ============ -->
+  <!-- Usamos senaite.core.widgets (se carga en Listings y vistas con widgets) -->
   <records
       interface="Products.CMFPlone.interfaces.resources.IBundleRegistry"
-      prefix="plone.bundles/senaite.core"
+      prefix="plone.bundles/senaite.core.widgets"
       purge="false">
     <value key="resources" purge="false">
-      <!-- mantenemos el CSS existente -->
-      <element>infolabsa-css</element>
-      <!-- 🔹 añadimos el JS al mismo bundle -->
-      <element>infolabsa-js</element>
+      <element>infolabsa</element>
     </value>
     <value key="enabled">True</value>
     <value key="compile">False</value>
