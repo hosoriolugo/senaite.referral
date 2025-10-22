@@ -1,12 +1,18 @@
 /* eslint-disable no-console */
-(function () {
+(function (jQ) {
   "use strict";
 
+  // Evita doble inicialización si Plone reinyecta el script
+  if (window.__infolabsa_bootstrapped__) return;
+  window.__infolabsa_bootstrapped__ = true;
+
+  var $ = jQ; // jQuery de Plone
   var TABLE_SELECTORS = [
     "table.listing",
     "table.listing-table",
     "table#listing",
-    "table.table"
+    "table.table",
+    "#listing-table"
   ];
 
   var OOR_TEXT_PATTERNS = [
@@ -31,12 +37,14 @@
     };
   }
 
-  function log() {
-    if (window && window.localStorage && localStorage.getItem("infolabsa.debug") === "1") {
-      var args = Array.prototype.slice.call(arguments);
-      args.unshift("[infolabsa]");
-      console.log.apply(console, args);
-    }
+  function dlog() {
+    try {
+      if (window && window.localStorage && localStorage.getItem("infolabsa.debug") === "1") {
+        var args = Array.prototype.slice.call(arguments);
+        args.unshift("[infolabsa]");
+        console.log.apply(console, args);
+      }
+    } catch (e) { /* ignore */ }
   }
 
   function markRow(tr) {
@@ -173,7 +181,7 @@
         });
       })
       .catch(function (err) {
-        log("helper error", err);
+        dlog("helper error", err);
       });
   }
 
@@ -183,52 +191,97 @@
       var tables = root.querySelectorAll(sel);
       Array.prototype.forEach.call(tables, processTable);
     });
-  }, 100);
+    dlog("scanAll() ejecutado");
+  }, 80);
 
-  var observer = new MutationObserver(function (mutations) {
-    var shouldScan = false;
-    for (var i = 0; i < mutations.length; i++) {
-      var m = mutations[i];
-      if (m.addedNodes && m.addedNodes.length) {
-        shouldScan = true;
-        break;
-      }
-    }
-    if (shouldScan) scanAll(document);
-  });
+  // ---------- TIMING / ENGANCHES ----------
 
-  function startObserver() {
-    try {
-      observer.observe(document.documentElement || document.body, {
-        childList: true,
-        subtree: true
-      });
-    } catch (e) {}
-  }
-
+  // a) Enganche AJAX: cada vez que se rellena un listing via folderitems
   function hookAjaxComplete() {
     if (!window.jQuery) return;
     try {
-      jQuery(document).ajaxComplete(function (_evt, _xhr, settings) {
-        try {
-          var url = (settings && settings.url) || "";
-          if (/\/folderitems(\?|$)/.test(url)) {
-            scanAll(document);
-          }
-        } catch (e) {}
+      $(document).ajaxComplete(function (_evt, _xhr, settings) {
+        var url = (settings && settings.url) || "";
+        if (/\/view\/folderitems(\?|$)/.test(url) || /\/folderitems(\?|$)/.test(url)) {
+          dlog("ajaxComplete -> folderitems");
+          scanAll(document);
+        }
       });
 
-      // 🔹 EXTRA: algunos listados disparan este evento custom al terminar de renderizar
-      jQuery(document).on("listing:rendered", function () {
+      // Algunos listados emiten este custom event al finalizar
+      $(document).on("listing:rendered", function () {
+        dlog("listing:rendered");
         scanAll(document);
       });
-    } catch (e) {}
+
+      // Por si el sitio usa ajaxStop al terminar “lotes” de llamadas
+      $(document).on("ajaxStop", debounce(function () {
+        dlog("ajaxStop");
+        scanAll(document);
+      }, 50));
+    } catch (e) { /* ignore */ }
+  }
+
+  // b) MutationObserver (solo en el contenedor principal para rendimiento)
+  var observer = null;
+  function startObserver() {
+    try {
+      var target = document.querySelector("#content-core") || document.getElementById("content") || document.body;
+      if (!target || !window.MutationObserver) return;
+      observer = new MutationObserver(function (mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+          var m = mutations[i];
+          if (m.addedNodes && m.addedNodes.length) {
+            // Re-escanea si aparece alguna de las tablas objetivo
+            for (var j = 0; j < m.addedNodes.length; j++) {
+              var node = m.addedNodes[j];
+              if (!(node instanceof HTMLElement)) continue;
+              if (TABLE_SELECTORS.some(function (sel) {
+                return node.matches && node.matches(sel) || (node.querySelector && node.querySelector(sel));
+              })) {
+                dlog("MutationObserver -> nueva tabla");
+                scanAll(document);
+                return;
+              }
+            }
+          }
+        }
+      });
+      observer.observe(target, { childList: true, subtree: true });
+      dlog("MutationObserver activo");
+    } catch (e) { /* ignore */ }
+  }
+
+  // c) Init (ready) + prueba de vida opcional
+  function initBadge() {
+    if (document.getElementById("infolabsa-test-badge")) return;
+    var badge = document.createElement("div");
+    badge.id = "infolabsa-test-badge";
+    badge.style.position = "fixed";
+    badge.style.right = "8px";
+    badge.style.bottom = "8px";
+    badge.style.padding = "6px 10px";
+    badge.style.background = "#111";
+    badge.style.color = "#fff";
+    badge.style.font = "12px/1 sans-serif";
+    badge.style.zIndex = "99999";
+    badge.style.borderRadius = "6px";
+    badge.style.opacity = ".75";
+    badge.textContent = "INFOLABSA JS activo";
+    document.body.appendChild(badge);
   }
 
   function init() {
+    dlog("init()");
+    // Primera pasada por si el HTML inicial ya trae la tabla
     scanAll(document);
+    // Observa re-renderizaciones dinámicas
     startObserver();
+    // Re-aplica tras cada respuesta AJAX
     hookAjaxComplete();
+
+    // Deja un test-badge si debug está activo
+    try { if (localStorage.getItem("infolabsa.debug") === "1") initBadge(); } catch (e) {}
   }
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
@@ -237,7 +290,9 @@
     document.addEventListener("DOMContentLoaded", init);
   }
 
+  // API manual para depurar desde consola
   window.__infolabsa__ = {
     rescan: function () { scanAll(document); }
   };
-})();
+
+})(window.jQuery);
