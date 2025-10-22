@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console */ 
 (function () {
   "use strict";
 
@@ -20,14 +20,20 @@
     "out-of-range"
   ];
 
-  var OOR_ICON_HINTS = ["exclamation", "warning", "exclamation_red.svg", "warning.svg"];
+  // Añadimos "resultsinterpretation" por si el SVG se usa también en el listado
+  var OOR_ICON_HINTS = ["exclamation", "warning", "exclamation_red.svg", "warning.svg", "resultsinterpretation"];
 
   // Estados del listado de muestras que vale la pena revisar en servidor
+  // (cuando están pendientes de verificar o ya verificadas)
   var SAMPLE_REVIEW_STATES_TO_CHECK = [
     "to_be_verified",          // backend
     "por verificar",           // UI ES
     "pendiente de verificar",  // UI ES variante
-    "pending verification"     // UI EN
+    "pending verification",    // UI EN
+    "verified",                // backend/UI EN
+    "verificada",              // UI ES
+    "verificadas",             // UI ES plural
+    "verificado"               // UI ES género alterno
   ];
 
   // Límite de concurrencia para llamadas AJAX por fila
@@ -175,7 +181,7 @@
 
   function shouldCheckServerForRow(tr) {
     if (!isSamplesListPage()) return false;
-    // Sólo nos interesa si NO se detectó ya OOR en la fila y el estado es "por verificar"
+    // Sólo nos interesa si NO se detectó ya OOR en la fila y el estado es "por verificar" o "verificada"
     if (rowLooksOOR(tr)) return false;
     var txt = statusCellText(tr);
     return SAMPLE_REVIEW_STATES_TO_CHECK.some(function (k) { return txt.indexOf(k) > -1; });
@@ -299,7 +305,7 @@
       return; // si hay helper no hace falta seguir
     }
 
-    // 3) SIN helper → sólo /samples y sólo “por verificar”: fetch liviano por fila, con concurrencia limitada
+    // 3) SIN helper → sólo /samples y estados "por verificar" o "verificada": fetch liviano por fila, con concurrencia limitada
     if (isSamplesListPage()) {
       rows.forEach(function (tr) {
         if (tr.getAttribute("data-infolabsa-processed") === "1") return;
