@@ -174,3 +174,15 @@ table.table tbody tr:has(.oob-flag[data-oor="1"]) > td:first-child {
   outline: 3px solid fuchsia !important;
 }
 
+/* Pintar fila si contiene el ícono de fuera de rango (fallback sin JS) */
+table.contentstable tr:has(img[src*="exclamation_red.svg"]),
+table.table tr:has(img[src*="exclamation_red.svg"]),
+#content table tr:has(img[src*="exclamation_red.svg"]) {
+  background-color: #ffe5e3 !important;
+}
+table.contentstable tr:has(img[src*="exclamation_red.svg"]) > td:first-child,
+table.table tr:has(img[src*="exclamation_red.svg"]) > td:first-child,
+#content table tr:has(img[src*="exclamation_red.svg"]) > td:first-child {
+  box-shadow: inset 4px 0 0 #ffb3ad !important;
+}
+
