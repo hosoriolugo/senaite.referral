@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 /*!
- * infolabsa.js — versión segura con AUTODISABLE del anterior
+ * infolabsa.js — versión segura SIN FETCH (optimizada rendimiento)
  *
  * Modo seguro:
  *   - Por defecto NO hace nada.
@@ -24,46 +24,37 @@
   } catch (_e) { return; }
 
   // ====== Etapa 1: “matar” versión anterior una sola vez ======
-  // Cambia el valor si vuelves a necesitar forzar este paso en otra actualización.
   var MIGRATION_TAG = "v2.0-autodisable-2025-10-22";
   try {
     var ls = window.localStorage;
     var alreadyMigrated = ls.getItem("infolabsa.migrated") === MIGRATION_TAG;
 
     if (!alreadyMigrated) {
-      // Si existía un objeto anterior con método de parada, intentalo.
       try {
         if (window.__infolabsa__ && typeof window.__infolabsa__.stop === "function") {
           window.__infolabsa__.stop();
         }
       } catch (_eStop) {}
 
-      // Desactiva cualquier activación previa y marca migración.
       try { ls.removeItem("infolabsa.enabled"); } catch (_e1) {}
       try { ls.setItem("infolabsa.migrated", MIGRATION_TAG); } catch (_e2) {}
 
-      // Evita recargas en bucle:
       var reloadedOnce = ls.getItem("infolabsa.reloadedOnce") === "1";
       if (!reloadedOnce) {
         try { ls.setItem("infolabsa.reloadedOnce", "1"); } catch (_e3) {}
-        // Recarga una sola vez para que el sitio arranque SIN el estado previo activado.
         try { location.reload(); return; } catch (_e4) {}
       }
     }
-  } catch (_eMig) {
-    // Si localStorage falla, seguimos; el archivo sigue siendo no-op por defecto.
-  }
+  } catch (_eMig) {}
 
   // ====== Etapa 2: API pública SIEMPRE disponible ======
   function setLS(key, val){ try { localStorage.setItem(key, val); } catch(_e){} }
   function delLS(key){ try { localStorage.removeItem(key); } catch(_e){} }
 
-  // Sobrescribe cualquier __infolabsa__ viejo con una API mínima y segura
   window.__infolabsa__ = {
     enable: function () { setLS("infolabsa.enabled","1"); try{ location.reload(); }catch(_e){} },
     disable: function () { delLS("infolabsa.enabled");  try{ location.reload(); }catch(_e){} },
-    rescan: function () { /* no-op hasta que esté activado */ },
-    // stop() existe por compatibilidad: no hay observers en esta versión.
+    rescan: function () { /* se redefine al inicializar si está activado */ },
     stop: function () { /* no-op en versión segura */ }
   };
 
@@ -72,8 +63,7 @@
   try { enabled = localStorage.getItem("infolabsa.enabled") === "1"; } catch (_e) { enabled = false; }
   if (!enabled) return;
 
-  // ====== Lógica pasiva cuando SÍ esté activado (sin observers/HOOKs AJAX) ======
-  // Una sola lectura del DOM en /samples.
+  // ====== Lógica pasiva (solo DOM, sin fetch) ======
   var TABLE_SELECTORS = [
     "table.listing",
     "table.listing-table",
@@ -82,26 +72,22 @@
     ".app-listing table"
   ];
 
-  // Patrones de texto habituales para OOR
   var OOR_TEXT_PATTERNS = [
     "fuera de rango", "out of range", "out-of-range", "oor",
     "fuera del rango", "range violation", "range_violation",
     "alerta crítica", "crítico", "critical", "panic", "panic high", "panic low"
   ];
 
-  // Recursos/íconos que delatan alerta
   var OOR_ICON_HINTS = [
     "exclamation", "warning", "alert", "triangle",
     "exclamation_red.svg", "warning.svg", "icon-alert", "fa-exclamation"
   ];
 
-  // Clases comunes usadas para marcar fuera de rango/alertas
   var OOR_CLASS_HINTS = [
     "fr-alert", "al-critical", "al-delta", "out-of-range", "range-violation",
     "state-oor", "state-outofrange", "is-oor", "has-oor"
   ];
 
-  // Estados de revisión relevantes (filtra filas realmente "vivas")
   var SAMPLE_REVIEW_STATES_TO_CHECK = [
     "to_be_verified", "por verificar", "pendiente de verificar",
     "pending verification", "verified", "verificada", "verificado"
@@ -114,9 +100,31 @@
 
   function markRow(tr){
     try{
+      if (!tr) return;
+      if (tr.classList.contains("row-flag-alert")) return;
       tr.classList.add("row-flag-alert");
       tr.setAttribute("data-row-alert","1");
       tr.setAttribute("data-infolabsa-processed","1");
+
+      // Inyecta un flag invisible para CSS más potente si lo necesitas (:has)
+      var td = tr.querySelector('td') || tr;
+      if (td && !td.querySelector('.oob-flag[data-oor="1"]')) {
+        var span = document.createElement('span');
+        span.className = 'oob-flag';
+        span.setAttribute('data-oor', '1');
+        span.style.display = 'none';
+        td.appendChild(span);
+      }
+
+      // Opcional: marca la fila de categoría si existe
+      var catName = tr.getAttribute('category');
+      if (catName) {
+        var catRow = tr.closest('table')?.querySelector('tr.categoryrow[category="'+CSS.escape(catName)+'"]');
+        if (catRow) {
+          catRow.classList.add('row-flag-alert');
+          catRow.setAttribute('data-row-alert','1');
+        }
+      }
     } catch(e){ log("markRow err", e); }
   }
 
@@ -130,20 +138,18 @@
     return false;
   }
 
-  // Detección robusta de "fuera de rango" SOLO en la fila/celdas
-  function rowLooksOOR(tr, tbl){
+  // Detección de OOR SOLO con lo que ya está en el DOM (texto, clases, iconos)
+  function rowLooksOOR(tr){
     try{
       if (tr.classList.contains("row-flag-alert") || tr.getAttribute("data-row-alert")==="1") return true;
       if (tr.getAttribute("data-has-oor")==="1" || tr.querySelector('[data-oor="1"]')) return true;
 
-      // 1) Clases de alerta en la propia fila o en sus celdas
       for (var c=0; c<OOR_CLASS_HINTS.length; c++){
         var cls = OOR_CLASS_HINTS[c];
         if (tr.classList.contains(cls)) return true;
         if (tr.querySelector("td."+cls+", td ."+cls+' , td [class*="'+cls+'"]')) return true;
       }
 
-      // 2) Íconos dentro de la fila
       var imgs = tr.querySelectorAll("td img, td svg, td use");
       for (var i=0;i<imgs.length;i++){
         var el = imgs[i];
@@ -155,7 +161,6 @@
         }
       }
 
-      // 3) Texto SOLO de las celdas de la fila
       var cells = tr.querySelectorAll("td");
       for (var t=0;t<OOR_TEXT_PATTERNS.length;t++){
         var pat = OOR_TEXT_PATTERNS[t];
@@ -165,7 +170,6 @@
         }
       }
 
-      // 4) Columnas típicas de "estado" o "alerta"
       var likely = tr.querySelector('td[class*="state"], td[class*="status"], td[class*="alert"], td[class*="range"]');
       if (likely){
         var ltxt = (likely.innerText || "").toLowerCase();
@@ -186,9 +190,8 @@
     for (var i=0;i<rows.length;i++){
       var tr = rows[i];
       if (tr.getAttribute("data-infolabsa-processed")==="1") continue;
-      // Solo evaluamos filas "de datos" con estados relevantes
       if (!rowStateRelevant(tr)) { tr.setAttribute("data-infolabsa-processed","1"); continue; }
-      if (rowLooksOOR(tr, tbl)) { markRow(tr); marked++; }
+      if (rowLooksOOR(tr)) { markRow(tr); marked++; }
       else { tr.setAttribute("data-infolabsa-processed","1"); }
     }
     log("processTable: filas=", rows.length, "marcadas=", marked);
@@ -212,11 +215,35 @@
   function init(){
     if (!(document && document.body)) return;
     if (!isSamplesListPage()) { log("init: fuera de /samples (noop)"); return; }
-    log("init @samples (enabled, modo seguro sin observers)");
+    log("init @samples (enabled, sin fetch; observers mínimos)");
     // una sola pasada, con pequeño delay para permitir que la tabla exista
     setTimeout(function(){ safe(function(){ scanAll(document); }); }, 100);
-    // rescan manual por consola, si lo necesitas
+
+    // rescan manual por consola si lo necesitas
     window.__infolabsa__.rescan = function(){ if (isSamplesListPage()) scanAll(document); };
+
+    // Hook oficial si existe
+    document.addEventListener('listing:after-render', function(e){
+      safe(function(){ scanAll(e?.target || document); });
+    }, true);
+
+    // Fallback: observar SOLO <tbody> actual (ligero)
+    var table = document.querySelector('table');
+    var tbody = table?.tBodies?.[0] || table?.querySelector?.('tbody');
+    if (tbody) {
+      try {
+        var mo = new MutationObserver(function(muts){
+          if (muts.some(function(m){ return (m.addedNodes?.length || 0) > 0; })) {
+            // Debounce corto para lotes
+            clearTimeout(mo._t);
+            mo._t = setTimeout(function(){ safe(function(){ scanAll(document); }); }, 60);
+          }
+        });
+        mo.observe(tbody, { childList: true, subtree: true });
+      } catch (err) {
+        log('observer tbody error', err);
+      }
+    }
   }
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
@@ -226,439 +253,94 @@
   }
 })();
 
-// Marca filas con resultado fuera de rango
+/* ====== Vista de muestra (tabla de análisis): marca filas si ya hay icono OOR ======
+   No hace fetch; solo lee el DOM actual y aplica .row-flag-alert para que tu CSS pinte. */
 document.addEventListener('DOMContentLoaded', function () {
-  // filas de la tabla de análisis en la vista de muestra
-  const rows = document.querySelectorAll('table.contentstable tr.contentrow.parent');
-
-  rows.forEach(tr => {
-    const outOfRangeIcon = tr.querySelector(
-      'img[title="Result out of range"], img[src*="exclamation_red.svg"]'
-    );
+  var rows = document.querySelectorAll('table.contentstable tr.contentrow.parent');
+  rows.forEach(function(tr){
+    var outOfRangeIcon = tr.querySelector('img[title="Result out of range"], img[src*="exclamation_red.svg"]');
     if (outOfRangeIcon) {
-      tr.classList.add('row-flag-alert');     // tu CSS ya estiliza esta clase
-      tr.setAttribute('data-row-alert', '1');  // por si usas el selector de atributo
-      // (opcional) marca la cabecera de categoría
-      const catName = tr.getAttribute('category');
-      const catRow = document.querySelector(`tr.categoryrow[category="${catName}"]`);
-      if (catRow) catRow.classList.add('row-flag-alert');
+      if (!tr.classList.contains('row-flag-alert')) {
+        tr.classList.add('row-flag-alert');
+        tr.setAttribute('data-row-alert', '1');
+      }
+      var catName = tr.getAttribute('category');
+      if (catName) {
+        var catRow = document.querySelector('tr.categoryrow[category="'+catName+'"]');
+        if (catRow) catRow.classList.add('row-flag-alert');
+      }
     }
   });
 });
 
-// === OOR highlighter (robusto + trazas) ===
+/* ====== Highlighter por iconos/texto en cualquier listing renderizado ======
+   Sin fetch. Reacciona a listing:after-render y a cambios DOM ligeros. */
 (function () {
-  const OOR_IMG_SEL = 'img[src*="exclamation_red.svg"], img[title*="out of range" i]';
+  var OOR_IMG_SEL = 'img[src*="exclamation_red.svg"], img[title*="out of range" i]';
 
   function markRow(tr) {
     if (!tr || tr.dataset.oorApplied === '1') return;
     tr.classList.add('row-flag-alert');
     tr.setAttribute('data-row-alert', '1');
 
-    // Inyecta un marcador (para CSS :has(.oob-flag[data-oor="1"]))
-    const td = tr.querySelector('td') || tr;
+    var td = tr.querySelector('td') || tr;
     if (td && !td.querySelector('.oob-flag[data-oor="1"]')) {
-      const span = document.createElement('span');
+      var span = document.createElement('span');
       span.className = 'oob-flag';
       span.setAttribute('data-oor', '1');
       span.style.display = 'none';
       td.appendChild(span);
     }
-
     tr.dataset.oorApplied = '1';
   }
 
-  function markFromIcons(root = document) {
-    const imgs = root.querySelectorAll(OOR_IMG_SEL);
-    let count = 0;
-    imgs.forEach(img => {
-      const tr = img.closest('tr');
+  function markFromIcons(root) {
+    root = root || document;
+    var imgs = root.querySelectorAll(OOR_IMG_SEL);
+    var count = 0;
+    imgs.forEach(function(img){
+      var tr = img.closest('tr');
       if (tr) {
         markRow(tr);
         count++;
-        // (Opcional) marca fila de categoría si existe
-        const catName = tr.getAttribute('category');
+        var catName = tr.getAttribute('category');
         if (catName) {
-          const catRow =
-            tr.closest('table')?.querySelector(`tr.categoryrow[category="${CSS.escape(catName)}"]`);
+          var catRow = tr.closest('table')?.querySelector('tr.categoryrow[category="'+CSS.escape(catName)+'"]');
           if (catRow) markRow(catRow);
         }
       }
     });
-    console.debug('[OOR] Íconos encontrados:', imgs.length, ' | Filas marcadas:', count);
+    if (typeof console !== 'undefined' && console.debug) {
+      console.debug('[OOR] Íconos encontrados:', imgs.length, ' | Filas marcadas:', count);
+    }
   }
 
-  // 1) Al cargar
-  document.addEventListener('DOMContentLoaded', () => {
-    console.debug('[OOR] DOMContentLoaded');
-    markFromIcons();
-  });
+  document.addEventListener('DOMContentLoaded', function(){ markFromIcons(); });
+  document.addEventListener('listing:after-render', function(e){ markFromIcons(e.target || document); }, true);
 
-  // 2) Tras cada render Ajax (DataTables/listings). Si SENAITE dispara eventos, engánchate:
-  document.addEventListener('listing:after-render', (e) => {
-    console.debug('[OOR] listing:after-render', e.target);
-    markFromIcons(e.target || document);
-  }, true);
-
-  // 3) Fallback: MutationObserver por si no hay evento custom (protegido)
   try {
-    const target = document && document.body;
+    var target = document && document.body;
     if (target && target.nodeType === 1) {
-      const mo = new MutationObserver(muts => {
-        let doit = false;
-        for (const m of muts) {
-          for (const n of m.addedNodes || []) {
-            if (n.nodeType === 1) {
-              if (n.matches?.('tr, table, tbody') || n.querySelector?.(OOR_IMG_SEL)) {
-                doit = true;
-                break;
-              }
+      var mo = new MutationObserver(function(muts){
+        var doit = false;
+        for (var i=0;i<muts.length && !doit;i++){
+          var m = muts[i];
+          if (!m.addedNodes) continue;
+          for (var j=0;j<m.addedNodes.length;j++){
+            var n = m.addedNodes[j];
+            if (n.nodeType === 1 && (n.matches?.('tr, table, tbody') || n.querySelector?.(OOR_IMG_SEL))) {
+              doit = true; break;
             }
           }
-          if (doit) break;
         }
         if (doit) {
-          // Debounce simple
           clearTimeout(mo._t);
-          mo._t = setTimeout(() => markFromIcons(document), 50);
+          mo._t = setTimeout(function(){ markFromIcons(document); }, 50);
         }
       });
       mo.observe(target, { childList: true, subtree: true });
-    } else {
-      console.debug('[OOR] Fallback observer no iniciado: target no es Node');
     }
   } catch (err) {
-    console.debug('[OOR] Fallback observer error:', err);
-  }
-})();
-
-// === OOR en listado de Muestras (marca filas con analitos fuera de rango) ===
-(function () {
-  const OOR_IMG_RE = /exclamation_red\.svg|warning\.svg/i;
-
-  function getAuthenticator() {
-    const el = document.querySelector('input[name="_authenticator"]');
-    if (el?.value) return el.value;
-    const q = new URLSearchParams(location.search);
-    const tok = q.get('_authenticator');
-    if (tok) return tok;
-    return window.AUTH_TOKEN || '';
-  }
-
-  // Marca una fila de muestra (reusa el marcador del highlighter previo)
-  function markSampleRow(tr) {
-    if (!tr || tr.dataset.sampleOorApplied === '1') return;
-    tr.classList.add('row-flag-alert');
-    tr.setAttribute('data-row-alert', '1');
-    const td = tr.querySelector('td') || tr;
-    if (td && !td.querySelector('.oob-flag[data-oor="1"]')) {
-      const span = document.createElement('span');
-      span.className = 'oob-flag';
-      span.setAttribute('data-oor', '1');
-      span.style.display = 'none';
-      td.appendChild(span);
-    }
-    tr.dataset.sampleOorApplied = '1';
-  }
-
-  // ——— Ajuste: construir SIEMPRE URL ABSOLUTA de la muestra
-  function findSampleLink(tr) {
-    const a =
-      tr.querySelector('a[href^="/"][href*="/clients/"]') ||
-      tr.querySelector('a[href^="/"][href*="/samples/"]') ||
-      tr.querySelector('a[href^="/"]') ||
-      tr.querySelector('a');
-    if (!a) return null;
-    try {
-      return new URL(a.getAttribute('href'), location.origin).href; // absoluta
-    } catch (_e) {
-      // último recurso: devolver tal cual
-      return a.getAttribute('href');
-    }
-  }
-
-  // Dado el href ABSOLUTO de la muestra, consulta su tabla de análisis y detecta íconos OOR
-  async function sampleHasOOR(sampleHrefAbs, auth) {
-    const base = String(sampleHrefAbs || '').replace(/\/$/, '');
-    if (!base) return false;
-
-    const url = `${base}/table_lab_analyses/folderitems${auth ? `?_authenticator=${encodeURIComponent(auth)}` : ''}`;
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Accept': 'text/html,application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: null
-      });
-      const txt = await res.text();
-      return OOR_IMG_RE.test(txt);
-    } catch (err) {
-      console.debug('[OOR][samples] fallo consultando', url, err);
-      return false;
-    }
-  }
-
-  async function markSamplesFromAnalyses(root = document) {
-    if (!/\/samples(?:[/?#]|$)/.test(location.pathname)) return;
-
-    const table = root.querySelector('table') || document.querySelector('table');
-    if (!table) return;
-
-    const auth = getAuthenticator();
-    const rows = Array.from(table.querySelectorAll('tbody > tr'));
-
-    const items = rows.map(tr => {
-      if (tr.dataset.sampleOorChecked === '1') return null;
-      const hrefAbs = findSampleLink(tr);
-      if (!hrefAbs) return null;
-      return { tr, hrefAbs };
-    }).filter(Boolean);
-
-    const maxConcurrent = 4;
-    let i = 0;
-
-    async function worker() {
-      while (i < items.length) {
-        const idx = i++;
-        const { tr, hrefAbs } = items[idx];
-        tr.dataset.sampleOorChecked = '1';
-        const has = await sampleHasOOR(hrefAbs, auth);
-        if (has) markSampleRow(tr);
-      }
-    }
-
-    await Promise.all(Array.from({ length: Math.min(maxConcurrent, items.length) }, worker));
-    console.debug('[OOR][samples] Filas revisadas:', items.length);
-  }
-
-  function onAfterRender(e) {
-    markSamplesFromAnalyses(e?.target || document);
-  }
-
-  // Fallback universal: observar un contenedor SIEMPRE válido (solo en /samples)
-  function getListingContainer() {
-    return (
-      document.querySelector('#content-core') ||
-      document.querySelector('#region-content') ||
-      document.querySelector('#content') ||
-      document.body
-    );
-  }
-
-  function boot() {
-    if (!/\/samples(?:[/?#]|$)/.test(location.pathname)) return;
-
-    // 1) Corrida inicial
-    markSamplesFromAnalyses();
-
-    // 2) Evento nativo de listing si existe
-    document.addEventListener('listing:after-render', onAfterRender, true);
-
-    // 3) Fallback: MutationObserver seguro al contenedor
-    try {
-      const container = getListingContainer();
-      if (container && container.nodeType === 1) {
-        const mo = new MutationObserver((mutations) => {
-          if (mutations.some(m => m.addedNodes && m.addedNodes.length)) {
-            // pequeño debounce
-            clearTimeout(mo._t);
-            mo._t = setTimeout(() => markSamplesFromAnalyses(document), 60);
-          }
-        });
-        mo.observe(container, { childList: true, subtree: true });
-      } else {
-        console.debug('[OOR][samples] No se encontró contenedor Node para observar (fallback omitido)');
-      }
-    } catch (err) {
-      console.debug('[OOR][samples] Error iniciando fallback observer:', err);
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
-})();
-
-// === HOTFIX /samples: OOR más liviano y cancelable ===
-(function () {
-  if (!/\/samples(?:[/?#]|$)/.test(location.pathname)) return;
-
-  // Flags configurables vía localStorage:
-  // - infolabsa.samples.fetch = "0"  -> desactiva fetch remotos (solo DOM)
-  // - infolabsa.samples.max = "20"   -> máximo de filas por ciclo
-  // - infolabsa.samples.k = "2"      -> concurrencia
-
-  const OOR_IMG_SEL = 'img[src*="exclamation_red.svg"], img[title*="out of range" i]';
-  const OOR_TXT = /out[-\s]?of[-\s]?range|fuera\s+de\s+rango|range[_\s-]?violation|critical|crítico|panic/i;
-  const FETCH_ENABLED = (localStorage.getItem('infolabsa.samples.fetch') ?? '1') === '1';
-
-  let renderToken = 0;
-  let inflight = new Set();
-  let aborter = null;
-
-  function getAuthenticator() {
-    const el = document.querySelector('input[name="_authenticator"]');
-    if (el && el.value) return el.value;
-    const q = new URLSearchParams(location.search);
-    return q.get('_authenticator') || window.AUTH_TOKEN || '';
-  }
-
-  function rowLooksOORLocal(tr) {
-    if (tr.matches('.row-flag-alert,[data-row-alert="1"]')) return true;
-    if (tr.querySelector(OOR_IMG_SEL)) return true;
-    const tds = tr.querySelectorAll('td');
-    for (const td of tds) {
-      if (OOR_TXT.test((td.innerText || '').toLowerCase())) return true;
-    }
-    return false;
-  }
-
-  function mark(tr) {
-    if (!tr || tr.dataset.sampleOorApplied === '1') return;
-    tr.classList.add('row-flag-alert');
-    tr.setAttribute('data-row-alert', '1');
-    let td = tr.querySelector('td') || tr;
-    if (td && !td.querySelector('.oob-flag[data-oor="1"]')) {
-      const span = document.createElement('span');
-      span.className = 'oob-flag';
-      span.setAttribute('data-oor', '1');
-      span.style.display = 'none';
-      td.appendChild(span);
-    }
-    tr.dataset.sampleOorApplied = '1';
-  }
-
-  function findSampleHrefAbs(tr) {
-    const a =
-      tr.querySelector('a[href^="/"][href*="/clients/"]') ||
-      tr.querySelector('a[href^="/"][href*="/samples/"]') ||
-      tr.querySelector('a[href^="/"]');
-    if (!a) return null;
-    try { return new URL(a.getAttribute('href'), location.origin).href.replace(/\/$/, ''); }
-    catch { return null; }
-  }
-
-  async function sampleHasOOR(hrefAbs, auth, signal) {
-    const url = `${hrefAbs}/table_lab_analyses/folderitems${auth ? `?_authenticator=${encodeURIComponent(auth)}` : ''}`;
-    const res = await fetch(url, { method: 'POST', headers: { 'Accept': 'text/html,application/json' }, signal });
-    const txt = await res.text();
-    return /exclamation_red\.svg|warning\.svg/i.test(txt);
-  }
-
-  // Nueva versión con:
-  // - AbortController por re-render
-  // - Intersección (viewport-first)
-  // - Límite de filas y concurrencia
-  async function markSamplesFromAnalyses(root = document) {
-    const myToken = ++renderToken;
-
-    // Cancelar todo lo anterior
-    if (aborter) try { aborter.abort(); } catch {}
-    aborter = new AbortController();
-    const { signal } = aborter;
-
-    const auth = getAuthenticator();
-    const table = (root.querySelector('table') || document.querySelector('table'));
-    if (!table) return;
-
-    const rows = Array.from(table.querySelectorAll('tbody > tr'));
-    if (!rows.length) return;
-
-    // 1) Marcado local inmediato (0ms)
-    for (const tr of rows) {
-      if (rowLooksOORLocal(tr)) mark(tr);
-    }
-
-    // 2) Si no se permite fetch, terminar aquí
-    if (!FETCH_ENABLED) return;
-
-    // 3) Preparar lote de trabajo (sin repetidos)
-    const candidates = [];
-    for (const tr of rows) {
-      if (tr.dataset.sampleOorChecked === '1') continue;
-      const hrefAbs = findSampleHrefAbs(tr);
-      if (!hrefAbs) continue;
-      candidates.push({ tr, hrefAbs });
-    }
-    if (!candidates.length) return;
-
-    // 4) Priorizar visibles en viewport
-    const visible = new Set();
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) visible.add(e.target); });
-    }, { root: table.parentElement || null, threshold: 0.01 });
-
-    candidates.forEach(({ tr }) => io.observe(tr));
-
-    // Espera ínfima para poblar visibles
-    await new Promise(r => setTimeout(r, 50));
-    io.disconnect();
-
-    const visFirst = [
-      ...candidates.filter(c => visible.has(c.tr)),
-      ...candidates.filter(c => !visible.has(c.tr))
-    ];
-
-    // 5) Caps
-    const MAX_ROWS = parseInt(localStorage.getItem('infolabsa.samples.max') || '20', 10);
-    const K = parseInt(localStorage.getItem('infolabsa.samples.k') || '2', 10);
-    const work = visFirst.slice(0, Math.max(0, MAX_ROWS));
-
-    let i = 0;
-    async function worker() {
-      while (i < work.length) {
-        // Si hubo un nuevo render, abortar este ciclo
-        if (myToken !== renderToken) return;
-
-        const idx = i++;
-        const { tr, hrefAbs } = work[idx];
-        if (!tr || tr.dataset.sampleOorChecked === '1') continue;
-
-        tr.dataset.sampleOorChecked = '1';
-
-        // Evitar duplicados reales (misma URL en otra fila)
-        if (inflight.has(hrefAbs)) continue;
-        inflight.add(hrefAbs);
-
-        try {
-          const has = await sampleHasOOR(hrefAbs, auth, signal);
-          if (has) mark(tr);
-        } catch (err) {
-          if (err?.name !== 'AbortError') {
-            console.debug('[OOR][samples] fallo', hrefAbs, err);
-          }
-        } finally {
-          inflight.delete(hrefAbs);
-        }
-      }
-    }
-
-    await Promise.all(Array.from({ length: Math.min(K, work.length) }, worker));
-    // Limpieza suave si sigue siendo el último render
-    if (myToken === renderToken) inflight.clear();
-  }
-
-  // Reemplaza/eleva la función pública si existiera
-  const api = (window.__infolabsa__ = window.__infolabsa__ || {});
-  api.rescan = () => markSamplesFromAnalyses(document);
-
-  // Hooks de ciclo de vida (una sola vez por render)
-  document.addEventListener('DOMContentLoaded', () => markSamplesFromAnalyses(), { once: true });
-  document.addEventListener('listing:after-render', (e) => markSamplesFromAnalyses(e.target || document), true);
-
-  // Fallback mínimo: observar SOLO el <tbody> actual (no todo el body)
-  const table = document.querySelector('table');
-  const tbody = table?.tBodies?.[0] || table?.querySelector?.('tbody');
-  if (tbody) {
-    const mo = new MutationObserver((muts) => {
-      if (muts.some(m => (m.addedNodes?.length || 0) > 0)) {
-        markSamplesFromAnalyses(document);
-      }
-    });
-    mo.observe(tbody, { childList: true, subtree: true });
+    if (console && console.debug) console.debug('[OOR] Fallback observer error:', err);
   }
 })();
