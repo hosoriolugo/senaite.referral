@@ -143,54 +143,47 @@ tbody tr.row-flag-alert td.getId,
   }
 }
 
-/* === Fallback extra ===
-   Si por algún motivo la fila NO recibe la clase .row-flag-alert,
-   pero el adapter inyecta el marcador oculto .oob-flag[data-oor="1"]
-   dentro de alguna celda, pintamos la fila usando :has().
-   (Funciona en Chrome/Edge/Safari y Firefox 121+) */
-.contentstable tbody tr:has(.oob-flag[data-oor="1"]),
-.contentstable tbody tr:has(.oob-flag[data-oor="1"]) > td,
-table.table tbody tr:has(.oob-flag[data-oor="1"]),
-table.table tbody tr:has(.oob-flag[data-oor="1"]) > td {
-  background-color: #ffe5e3 !important;
-  border-top-color: #ffbdb8 !important;
+/* === Fallback extra con :has() (se aplica sólo si el navegador lo soporta) === */
+@supports selector(:has(*)) {
+  /* Si por algún motivo la fila NO recibe la clase .row-flag-alert,
+     pero el adapter inyecta el marcador oculto .oob-flag[data-oor="1"],
+     pintamos la fila usando :has(). */
+  .contentstable tbody tr:has(.oob-flag[data-oor="1"]),
+  .contentstable tbody tr:has(.oob-flag[data-oor="1"]) > td,
+  table.table tbody tr:has(.oob-flag[data-oor="1"]),
+  table.table tbody tr:has(.oob-flag[data-oor="1"]) > td {
+    background-color: #ffe5e3 !important;
+    border-top-color: #ffbdb8 !important;
+  }
+
+  /* Mantener la línea izquierda con el fallback :has() */
+  .contentstable tbody tr:has(.oob-flag[data-oor="1"]) > td:first-child,
+  table.table tbody tr:has(.oob-flag[data-oor="1"]) > td:first-child {
+    box-shadow: inset 4px 0 0 #ffb3ad;
+  }
+
+  /* Pintar fila si contiene el ícono de fuera de rango (fallback sin JS) */
+  table.contentstable tr:has(img[src*="exclamation_red.svg"]),
+  table.table tr:has(img[src*="exclamation_red.svg"]),
+  #content table tr:has(img[src*="exclamation_red.svg"]) {
+    background-color: #ffe5e3 !important;
+  }
+  table.contentstable tr:has(img[src*="exclamation_red.svg"]) > td:first-child,
+  table.table tr:has(img[src*="exclamation_red.svg"]) > td:first-child,
+  #content table tr:has(img[src*="exclamation_red.svg"]) > td:first-child {
+    box-shadow: inset 4px 0 0 #ffb3ad !important;
+  }
 }
 
-/* Mantener la línea izquierda con el fallback :has() */
-.contentstable tbody tr:has(.oob-flag[data-oor="1"]) > td:first-child,
-table.table tbody tr:has(.oob-flag[data-oor="1"]) > td:first-child {
-  box-shadow: inset 4px 0 0 #ffb3ad;
+/* DEBUG opcional: sólo si el <body> tiene .oor-debug */
+body.oor-debug .contentstable tbody tr:first-child > td {
+  outline: 3px solid fuchsia !important; /* antes: TEST TEMPORAL siempre activo */
 }
 
-/* Refuerzo de especificidad para el atributo data-row-alert en contentstable */
-.contentstable tbody tr[data-row-alert="1"],
-.contentstable tbody tr[data-row-alert="1"] > td {
-  background-color: #ffe5e3 !important;
-  border-top-color: #ffbdb8 !important;
-}
-
-/* TEST TEMPORAL: debería dibujar un borde fucsia en la 1ª fila del listado */
-.contentstable tbody tr:first-child > td {
-  outline: 3px solid fuchsia !important;
-}
-
-/* Pintar fila si contiene el ícono de fuera de rango (fallback sin JS) */
-table.contentstable tr:has(img[src*="exclamation_red.svg"]),
-table.table tr:has(img[src*="exclamation_red.svg"]),
-#content table tr:has(img[src*="exclamation_red.svg"]) {
-  background-color: #ffe5e3 !important;
-}
-table.contentstable tr:has(img[src*="exclamation_red.svg"]) > td:first-child,
-table.table tr:has(img[src*="exclamation_red.svg"]) > td:first-child,
-#content table tr:has(img[src*="exclamation_red.svg"]) > td:first-child {
-  box-shadow: inset 4px 0 0 #ffb3ad !important;
-}
-
-/* Resaltado de filas de muestra con analitos fuera de rango */
+/* Unificación visual en contenedor genérico (#content) para evitar overrides ámbar */
 #content table tr.row-flag-alert {
-  background-color: #fff5e6 !important; /* ámbar suave */
+  background-color: #ffe5e3 !important; /* mismo rojo suave que el resto */
 }
 #content table tr.row-flag-alert > td:first-child {
-  box-shadow: inset 4px 0 0 #ffb366 !important;
+  box-shadow: inset 4px 0 0 #ffb3ad !important;
 }
-
