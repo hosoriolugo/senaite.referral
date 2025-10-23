@@ -300,44 +300,48 @@ document.addEventListener('DOMContentLoaded', function () {
     markFromIcons(e.target || document);
   }, true);
 
-  // 3) Fallback: MutationObserver por si no hay evento custom
-  const mo = new MutationObserver(muts => {
-    let doit = false;
-    for (const m of muts) {
-      for (const n of m.addedNodes || []) {
-        if (n.nodeType === 1) {
-          if (n.matches?.('tr, table, tbody') || n.querySelector?.(OOR_IMG_SEL)) {
-            doit = true;
-            break;
+  // 3) Fallback: MutationObserver por si no hay evento custom (protegido)
+  try {
+    const target = document && document.body;
+    if (target && target.nodeType === 1) {
+      const mo = new MutationObserver(muts => {
+        let doit = false;
+        for (const m of muts) {
+          for (const n of m.addedNodes || []) {
+            if (n.nodeType === 1) {
+              if (n.matches?.('tr, table, tbody') || n.querySelector?.(OOR_IMG_SEL)) {
+                doit = true;
+                break;
+              }
+            }
           }
+          if (doit) break;
         }
-      }
-      if (doit) break;
+        if (doit) {
+          // Debounce simple
+          clearTimeout(mo._t);
+          mo._t = setTimeout(() => markFromIcons(document), 50);
+        }
+      });
+      mo.observe(target, { childList: true, subtree: true });
+    } else {
+      console.debug('[OOR] Fallback observer no iniciado: target no es Node');
     }
-    if (doit) {
-      // Debounce simple
-      clearTimeout(mo._t);
-      mo._t = setTimeout(() => markFromIcons(document), 50);
-    }
-  });
-  mo.observe(document.body, { childList: true, subtree: true });
+  } catch (err) {
+    console.debug('[OOR] Fallback observer error:', err);
+  }
 })();
 
 // === OOR en listado de Muestras (marca filas con analitos fuera de rango) ===
 (function () {
-  // Reusa el selector de íconos del highlighter anterior 
-  // (asegúrate de que exista en el scope; si no, redefine aquí)
   const OOR_IMG_RE = /exclamation_red\.svg|warning\.svg/i;
 
   function getAuthenticator() {
-    // SENAITE suele inyectar un hidden con _authenticator; lo usamos si existe
     const el = document.querySelector('input[name="_authenticator"]');
     if (el?.value) return el.value;
-    // fallback: si viene en la URL
     const q = new URLSearchParams(location.search);
     const tok = q.get('_authenticator');
     if (tok) return tok;
-    // último recurso: variable global opcional si la tuvieses
     return window.AUTH_TOKEN || '';
   }
 
@@ -357,13 +361,38 @@ document.addEventListener('DOMContentLoaded', function () {
     tr.dataset.sampleOorApplied = '1';
   }
 
-  // Dado el href de la muestra, consulta su tabla de análisis y detecta íconos OOR
-  async function sampleHasOOR(sampleHref, auth) {
-    const base = sampleHref.replace(/\/$/, '');
+  // ——— Ajuste: construir SIEMPRE URL ABSOLUTA de la muestra
+  function findSampleLink(tr) {
+    const a =
+      tr.querySelector('a[href^="/"][href*="/clients/"]') ||
+      tr.querySelector('a[href^="/"][href*="/samples/"]') ||
+      tr.querySelector('a[href^="/"]') ||
+      tr.querySelector('a');
+    if (!a) return null;
+    try {
+      return new URL(a.getAttribute('href'), location.origin).href; // absoluta
+    } catch (_e) {
+      // último recurso: devolver tal cual
+      return a.getAttribute('href');
+    }
+  }
+
+  // Dado el href ABSOLUTO de la muestra, consulta su tabla de análisis y detecta íconos OOR
+  async function sampleHasOOR(sampleHrefAbs, auth) {
+    const base = String(sampleHrefAbs || '').replace(/\/$/, '');
+    if (!base) return false;
+
     const url = `${base}/table_lab_analyses/folderitems${auth ? `?_authenticator=${encodeURIComponent(auth)}` : ''}`;
     try {
-      const res = await fetch(url, { method: 'POST', headers: { 'Accept': 'text/html,application/json' }});
-      const txt = await res.text();             // La respuesta puede ser JSON o HTML; buscamos el icono por texto
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'text/html,application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: null
+      });
+      const txt = await res.text();
       return OOR_IMG_RE.test(txt);
     } catch (err) {
       console.debug('[OOR][samples] fallo consultando', url, err);
@@ -371,35 +400,31 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // Localiza filas de muestras en el listado y lanza comprobaciones en paralelo (limitadas)
   async function markSamplesFromAnalyses(root = document) {
     if (!/\/samples(?:[/?#]|$)/.test(location.pathname)) return;
 
-    const auth = getAuthenticator();
+    const table = root.querySelector('table') || document.querySelector('table');
+    if (!table) return;
 
-    // Selector tolerante a diferentes listados DataTables de SENAITE
-    const rows = Array.from((root.querySelector('table') || document).querySelectorAll('tbody > tr'));
-    // Encuentra el link "ID de muestra" por fila (suele apuntar a /clients/.../<SampleID>)
+    const auth = getAuthenticator();
+    const rows = Array.from(table.querySelectorAll('tbody > tr'));
+
     const items = rows.map(tr => {
       if (tr.dataset.sampleOorChecked === '1') return null;
-      const a =
-        tr.querySelector('a[href*="/clients/"]') ||   // vista de cliente con muestra
-        tr.querySelector('a[href*="/samples/"]');      // otros patrones
-      if (!a) return null;
-      const href = new URL(a.getAttribute('href'), location.origin).pathname;
-      return { tr, href };
+      const hrefAbs = findSampleLink(tr);
+      if (!hrefAbs) return null;
+      return { tr, hrefAbs };
     }).filter(Boolean);
 
-    // Pequeño pool de concurrencia para no saturar el servidor
     const maxConcurrent = 4;
-    let idx = 0;
+    let i = 0;
 
     async function worker() {
-      while (idx < items.length) {
-        const i = idx++;
-        const { tr, href } = items[i];
+      while (i < items.length) {
+        const idx = i++;
+        const { tr, hrefAbs } = items[idx];
         tr.dataset.sampleOorChecked = '1';
-        const has = await sampleHasOOR(href, auth);
+        const has = await sampleHasOOR(hrefAbs, auth);
         if (has) markSampleRow(tr);
       }
     }
@@ -408,11 +433,52 @@ document.addEventListener('DOMContentLoaded', function () {
     console.debug('[OOR][samples] Filas revisadas:', items.length);
   }
 
-  // Ejecuta en /samples al cargar y tras cada render del listing
-  document.addEventListener('DOMContentLoaded', () => markSamplesFromAnalyses());
-  document.addEventListener('listing:after-render', (e) => {
-    // e.target suele ser el contenedor de la tabla/listado actualizado
-    markSamplesFromAnalyses(e.target || document);
-  }, true);
-})();
+  function onAfterRender(e) {
+    markSamplesFromAnalyses(e?.target || document);
+  }
 
+  // Fallback universal: observar un contenedor SIEMPRE válido (solo en /samples)
+  function getListingContainer() {
+    return (
+      document.querySelector('#content-core') ||
+      document.querySelector('#region-content') ||
+      document.querySelector('#content') ||
+      document.body
+    );
+  }
+
+  function boot() {
+    if (!/\/samples(?:[/?#]|$)/.test(location.pathname)) return;
+
+    // 1) Corrida inicial
+    markSamplesFromAnalyses();
+
+    // 2) Evento nativo de listing si existe
+    document.addEventListener('listing:after-render', onAfterRender, true);
+
+    // 3) Fallback: MutationObserver seguro al contenedor
+    try {
+      const container = getListingContainer();
+      if (container && container.nodeType === 1) {
+        const mo = new MutationObserver((mutations) => {
+          if (mutations.some(m => m.addedNodes && m.addedNodes.length)) {
+            // pequeño debounce
+            clearTimeout(mo._t);
+            mo._t = setTimeout(() => markSamplesFromAnalyses(document), 60);
+          }
+        });
+        mo.observe(container, { childList: true, subtree: true });
+      } else {
+        console.debug('[OOR][samples] No se encontró contenedor Node para observar (fallback omitido)');
+      }
+    } catch (err) {
+      console.debug('[OOR][samples] Error iniciando fallback observer:', err);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
