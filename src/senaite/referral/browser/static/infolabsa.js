@@ -225,3 +225,23 @@
     document.addEventListener("DOMContentLoaded", function(){ safe(init); });
   }
 })();
+
+// Marca filas con resultado fuera de rango
+document.addEventListener('DOMContentLoaded', function () {
+  // filas de la tabla de análisis en la vista de muestra
+  const rows = document.querySelectorAll('table.contentstable tr.contentrow.parent');
+
+  rows.forEach(tr => {
+    const outOfRangeIcon = tr.querySelector(
+      'img[title="Result out of range"], img[src*="exclamation_red.svg"]'
+    );
+    if (outOfRangeIcon) {
+      tr.classList.add('row-flag-alert');     // tu CSS ya estiliza esta clase
+      tr.setAttribute('data-row-alert', '1');  // por si usas el selector de atributo
+      // (opcional) marca la cabecera de categoría
+      const catName = tr.getAttribute('category');
+      const catRow = document.querySelector(`tr.categoryrow[category="${catName}"]`);
+      if (catRow) catRow.classList.add('row-flag-alert');
+    }
+  });
+});
