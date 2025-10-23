@@ -245,3 +245,80 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 });
+
+// === OOR highlighter (robusto + trazas) ===
+(function () {
+  const OOR_IMG_SEL = 'img[src*="exclamation_red.svg"], img[title*="out of range" i]';
+
+  function markRow(tr) {
+    if (!tr || tr.dataset.oorApplied === '1') return;
+    tr.classList.add('row-flag-alert');
+    tr.setAttribute('data-row-alert', '1');
+
+    // Inyecta un marcador (para CSS :has(.oob-flag[data-oor="1"]))
+    const td = tr.querySelector('td') || tr;
+    if (td && !td.querySelector('.oob-flag[data-oor="1"]')) {
+      const span = document.createElement('span');
+      span.className = 'oob-flag';
+      span.setAttribute('data-oor', '1');
+      span.style.display = 'none';
+      td.appendChild(span);
+    }
+
+    tr.dataset.oorApplied = '1';
+  }
+
+  function markFromIcons(root = document) {
+    const imgs = root.querySelectorAll(OOR_IMG_SEL);
+    let count = 0;
+    imgs.forEach(img => {
+      const tr = img.closest('tr');
+      if (tr) {
+        markRow(tr);
+        count++;
+        // (Opcional) marca fila de categoría si existe
+        const catName = tr.getAttribute('category');
+        if (catName) {
+          const catRow =
+            tr.closest('table')?.querySelector(`tr.categoryrow[category="${CSS.escape(catName)}"]`);
+          if (catRow) markRow(catRow);
+        }
+      }
+    });
+    console.debug('[OOR] Íconos encontrados:', imgs.length, ' | Filas marcadas:', count);
+  }
+
+  // 1) Al cargar
+  document.addEventListener('DOMContentLoaded', () => {
+    console.debug('[OOR] DOMContentLoaded');
+    markFromIcons();
+  });
+
+  // 2) Tras cada render Ajax (DataTables/listings). Si SENAITE dispara eventos, engánchate:
+  document.addEventListener('listing:after-render', (e) => {
+    console.debug('[OOR] listing:after-render', e.target);
+    markFromIcons(e.target || document);
+  }, true);
+
+  // 3) Fallback: MutationObserver por si no hay evento custom
+  const mo = new MutationObserver(muts => {
+    let doit = false;
+    for (const m of muts) {
+      for (const n of m.addedNodes || []) {
+        if (n.nodeType === 1) {
+          if (n.matches?.('tr, table, tbody') || n.querySelector?.(OOR_IMG_SEL)) {
+            doit = true;
+            break;
+          }
+        }
+      }
+      if (doit) break;
+    }
+    if (doit) {
+      // Debounce simple
+      clearTimeout(mo._t);
+      mo._t = setTimeout(() => markFromIcons(document), 50);
+    }
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+})();
