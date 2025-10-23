@@ -322,3 +322,97 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   mo.observe(document.body, { childList: true, subtree: true });
 })();
+
+// === OOR en listado de Muestras (marca filas con analitos fuera de rango) ===
+(function () {
+  // Reusa el selector de íconos del highlighter anterior 
+  // (asegúrate de que exista en el scope; si no, redefine aquí)
+  const OOR_IMG_RE = /exclamation_red\.svg|warning\.svg/i;
+
+  function getAuthenticator() {
+    // SENAITE suele inyectar un hidden con _authenticator; lo usamos si existe
+    const el = document.querySelector('input[name="_authenticator"]');
+    if (el?.value) return el.value;
+    // fallback: si viene en la URL
+    const q = new URLSearchParams(location.search);
+    const tok = q.get('_authenticator');
+    if (tok) return tok;
+    // último recurso: variable global opcional si la tuvieses
+    return window.AUTH_TOKEN || '';
+  }
+
+  // Marca una fila de muestra (reusa el marcador del highlighter previo)
+  function markSampleRow(tr) {
+    if (!tr || tr.dataset.sampleOorApplied === '1') return;
+    tr.classList.add('row-flag-alert');
+    tr.setAttribute('data-row-alert', '1');
+    const td = tr.querySelector('td') || tr;
+    if (td && !td.querySelector('.oob-flag[data-oor="1"]')) {
+      const span = document.createElement('span');
+      span.className = 'oob-flag';
+      span.setAttribute('data-oor', '1');
+      span.style.display = 'none';
+      td.appendChild(span);
+    }
+    tr.dataset.sampleOorApplied = '1';
+  }
+
+  // Dado el href de la muestra, consulta su tabla de análisis y detecta íconos OOR
+  async function sampleHasOOR(sampleHref, auth) {
+    const base = sampleHref.replace(/\/$/, '');
+    const url = `${base}/table_lab_analyses/folderitems${auth ? `?_authenticator=${encodeURIComponent(auth)}` : ''}`;
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'Accept': 'text/html,application/json' }});
+      const txt = await res.text();             // La respuesta puede ser JSON o HTML; buscamos el icono por texto
+      return OOR_IMG_RE.test(txt);
+    } catch (err) {
+      console.debug('[OOR][samples] fallo consultando', url, err);
+      return false;
+    }
+  }
+
+  // Localiza filas de muestras en el listado y lanza comprobaciones en paralelo (limitadas)
+  async function markSamplesFromAnalyses(root = document) {
+    if (!/\/samples(?:[/?#]|$)/.test(location.pathname)) return;
+
+    const auth = getAuthenticator();
+
+    // Selector tolerante a diferentes listados DataTables de SENAITE
+    const rows = Array.from((root.querySelector('table') || document).querySelectorAll('tbody > tr'));
+    // Encuentra el link "ID de muestra" por fila (suele apuntar a /clients/.../<SampleID>)
+    const items = rows.map(tr => {
+      if (tr.dataset.sampleOorChecked === '1') return null;
+      const a =
+        tr.querySelector('a[href*="/clients/"]') ||   // vista de cliente con muestra
+        tr.querySelector('a[href*="/samples/"]');      // otros patrones
+      if (!a) return null;
+      const href = new URL(a.getAttribute('href'), location.origin).pathname;
+      return { tr, href };
+    }).filter(Boolean);
+
+    // Pequeño pool de concurrencia para no saturar el servidor
+    const maxConcurrent = 4;
+    let idx = 0;
+
+    async function worker() {
+      while (idx < items.length) {
+        const i = idx++;
+        const { tr, href } = items[i];
+        tr.dataset.sampleOorChecked = '1';
+        const has = await sampleHasOOR(href, auth);
+        if (has) markSampleRow(tr);
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(maxConcurrent, items.length) }, worker));
+    console.debug('[OOR][samples] Filas revisadas:', items.length);
+  }
+
+  // Ejecuta en /samples al cargar y tras cada render del listing
+  document.addEventListener('DOMContentLoaded', () => markSamplesFromAnalyses());
+  document.addEventListener('listing:after-render', (e) => {
+    // e.target suele ser el contenedor de la tabla/listado actualizado
+    markSamplesFromAnalyses(e.target || document);
+  }, true);
+})();
+
