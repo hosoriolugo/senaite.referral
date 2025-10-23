@@ -186,3 +186,11 @@ table.table tr:has(img[src*="exclamation_red.svg"]) > td:first-child,
   box-shadow: inset 4px 0 0 #ffb3ad !important;
 }
 
+/* Resaltado de filas de muestra con analitos fuera de rango */
+#content table tr.row-flag-alert {
+  background-color: #fff5e6 !important; /* ámbar suave */
+}
+#content table tr.row-flag-alert > td:first-child {
+  box-shadow: inset 4px 0 0 #ffb366 !important;
+}
+
