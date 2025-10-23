@@ -482,3 +482,183 @@ document.addEventListener('DOMContentLoaded', function () {
     boot();
   }
 })();
+
+// === HOTFIX /samples: OOR más liviano y cancelable ===
+(function () {
+  if (!/\/samples(?:[/?#]|$)/.test(location.pathname)) return;
+
+  // Flags configurables vía localStorage:
+  // - infolabsa.samples.fetch = "0"  -> desactiva fetch remotos (solo DOM)
+  // - infolabsa.samples.max = "20"   -> máximo de filas por ciclo
+  // - infolabsa.samples.k = "2"      -> concurrencia
+
+  const OOR_IMG_SEL = 'img[src*="exclamation_red.svg"], img[title*="out of range" i]';
+  const OOR_TXT = /out[-\s]?of[-\s]?range|fuera\s+de\s+rango|range[_\s-]?violation|critical|crítico|panic/i;
+  const FETCH_ENABLED = (localStorage.getItem('infolabsa.samples.fetch') ?? '1') === '1';
+
+  let renderToken = 0;
+  let inflight = new Set();
+  let aborter = null;
+
+  function getAuthenticator() {
+    const el = document.querySelector('input[name="_authenticator"]');
+    if (el && el.value) return el.value;
+    const q = new URLSearchParams(location.search);
+    return q.get('_authenticator') || window.AUTH_TOKEN || '';
+  }
+
+  function rowLooksOORLocal(tr) {
+    if (tr.matches('.row-flag-alert,[data-row-alert="1"]')) return true;
+    if (tr.querySelector(OOR_IMG_SEL)) return true;
+    const tds = tr.querySelectorAll('td');
+    for (const td of tds) {
+      if (OOR_TXT.test((td.innerText || '').toLowerCase())) return true;
+    }
+    return false;
+  }
+
+  function mark(tr) {
+    if (!tr || tr.dataset.sampleOorApplied === '1') return;
+    tr.classList.add('row-flag-alert');
+    tr.setAttribute('data-row-alert', '1');
+    let td = tr.querySelector('td') || tr;
+    if (td && !td.querySelector('.oob-flag[data-oor="1"]')) {
+      const span = document.createElement('span');
+      span.className = 'oob-flag';
+      span.setAttribute('data-oor', '1');
+      span.style.display = 'none';
+      td.appendChild(span);
+    }
+    tr.dataset.sampleOorApplied = '1';
+  }
+
+  function findSampleHrefAbs(tr) {
+    const a =
+      tr.querySelector('a[href^="/"][href*="/clients/"]') ||
+      tr.querySelector('a[href^="/"][href*="/samples/"]') ||
+      tr.querySelector('a[href^="/"]');
+    if (!a) return null;
+    try { return new URL(a.getAttribute('href'), location.origin).href.replace(/\/$/, ''); }
+    catch { return null; }
+  }
+
+  async function sampleHasOOR(hrefAbs, auth, signal) {
+    const url = `${hrefAbs}/table_lab_analyses/folderitems${auth ? `?_authenticator=${encodeURIComponent(auth)}` : ''}`;
+    const res = await fetch(url, { method: 'POST', headers: { 'Accept': 'text/html,application/json' }, signal });
+    const txt = await res.text();
+    return /exclamation_red\.svg|warning\.svg/i.test(txt);
+  }
+
+  // Nueva versión con:
+  // - AbortController por re-render
+  // - Intersección (viewport-first)
+  // - Límite de filas y concurrencia
+  async function markSamplesFromAnalyses(root = document) {
+    const myToken = ++renderToken;
+
+    // Cancelar todo lo anterior
+    if (aborter) try { aborter.abort(); } catch {}
+    aborter = new AbortController();
+    const { signal } = aborter;
+
+    const auth = getAuthenticator();
+    const table = (root.querySelector('table') || document.querySelector('table'));
+    if (!table) return;
+
+    const rows = Array.from(table.querySelectorAll('tbody > tr'));
+    if (!rows.length) return;
+
+    // 1) Marcado local inmediato (0ms)
+    for (const tr of rows) {
+      if (rowLooksOORLocal(tr)) mark(tr);
+    }
+
+    // 2) Si no se permite fetch, terminar aquí
+    if (!FETCH_ENABLED) return;
+
+    // 3) Preparar lote de trabajo (sin repetidos)
+    const candidates = [];
+    for (const tr of rows) {
+      if (tr.dataset.sampleOorChecked === '1') continue;
+      const hrefAbs = findSampleHrefAbs(tr);
+      if (!hrefAbs) continue;
+      candidates.push({ tr, hrefAbs });
+    }
+    if (!candidates.length) return;
+
+    // 4) Priorizar visibles en viewport
+    const visible = new Set();
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) visible.add(e.target); });
+    }, { root: table.parentElement || null, threshold: 0.01 });
+
+    candidates.forEach(({ tr }) => io.observe(tr));
+
+    // Espera ínfima para poblar visibles
+    await new Promise(r => setTimeout(r, 50));
+    io.disconnect();
+
+    const visFirst = [
+      ...candidates.filter(c => visible.has(c.tr)),
+      ...candidates.filter(c => !visible.has(c.tr))
+    ];
+
+    // 5) Caps
+    const MAX_ROWS = parseInt(localStorage.getItem('infolabsa.samples.max') || '20', 10);
+    const K = parseInt(localStorage.getItem('infolabsa.samples.k') || '2', 10);
+    const work = visFirst.slice(0, Math.max(0, MAX_ROWS));
+
+    let i = 0;
+    async function worker() {
+      while (i < work.length) {
+        // Si hubo un nuevo render, abortar este ciclo
+        if (myToken !== renderToken) return;
+
+        const idx = i++;
+        const { tr, hrefAbs } = work[idx];
+        if (!tr || tr.dataset.sampleOorChecked === '1') continue;
+
+        tr.dataset.sampleOorChecked = '1';
+
+        // Evitar duplicados reales (misma URL en otra fila)
+        if (inflight.has(hrefAbs)) continue;
+        inflight.add(hrefAbs);
+
+        try {
+          const has = await sampleHasOOR(hrefAbs, auth, signal);
+          if (has) mark(tr);
+        } catch (err) {
+          if (err?.name !== 'AbortError') {
+            console.debug('[OOR][samples] fallo', hrefAbs, err);
+          }
+        } finally {
+          inflight.delete(hrefAbs);
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(K, work.length) }, worker));
+    // Limpieza suave si sigue siendo el último render
+    if (myToken === renderToken) inflight.clear();
+  }
+
+  // Reemplaza/eleva la función pública si existiera
+  const api = (window.__infolabsa__ = window.__infolabsa__ || {});
+  api.rescan = () => markSamplesFromAnalyses(document);
+
+  // Hooks de ciclo de vida (una sola vez por render)
+  document.addEventListener('DOMContentLoaded', () => markSamplesFromAnalyses(), { once: true });
+  document.addEventListener('listing:after-render', (e) => markSamplesFromAnalyses(e.target || document), true);
+
+  // Fallback mínimo: observar SOLO el <tbody> actual (no todo el body)
+  const table = document.querySelector('table');
+  const tbody = table?.tBodies?.[0] || table?.querySelector?.('tbody');
+  if (tbody) {
+    const mo = new MutationObserver((muts) => {
+      if (muts.some(m => (m.addedNodes?.length || 0) > 0)) {
+        markSamplesFromAnalyses(document);
+      }
+    });
+    mo.observe(tbody, { childList: true, subtree: true });
+  }
+})();
