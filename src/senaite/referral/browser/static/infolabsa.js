@@ -3,79 +3,134 @@
  * infolabsa.js — versión segura SIN FETCH (optimizada rendimiento) + PARCHE DateTimeWidget
  */
 
-// ===================================================================
-// PARCHE DE EMERGENCIA - SE EJECUTA INMEDIATAMENTE
-// ===================================================================
-(function() {
-    'use strict';
-    
-    // Parche ULTRA-TEMPRANO para DateTimeWidget - se ejecuta ANTES que cualquier error
-    var patchDateTimeWidget = function() {
-        try {
-            // Interceptar la definición de DateTimeWidget ANTES de que se use
-            var originalDateTimeWidget = window.DateTimeWidget;
-            
-            Object.defineProperty(window, 'DateTimeWidget', {
-                configurable: true,
-                enumerable: true,
-                get: function() {
-                    return originalDateTimeWidget;
-                },
-                set: function(value) {
-                    if (value && value.prototype) {
-                        // Parchear autofill_now ANTES de que se asigne
-                        var originalAutofill = value.prototype.autofill_now;
-                        if (typeof originalAutofill === 'function') {
-                            value.prototype.autofill_now = function() {
-                                try {
-                                    // Verificar que los parámetros necesarios existan
-                                    if (this && arguments.length >= 0) {
-                                        return originalAutofill.apply(this, arguments);
-                                    }
-                                    return false;
-                                } catch (error) {
-                                    // Silenciar completamente el error
-                                    return false;
-                                }
-                            };
-                        }
-                    }
-                    originalDateTimeWidget = value;
-                }
-            });
-            
-            // Si DateTimeWidget ya existe, parchearlo inmediatamente
-            if (window.DateTimeWidget && window.DateTimeWidget.prototype) {
-                var existingAutofill = window.DateTimeWidget.prototype.autofill_now;
-                if (typeof existingAutofill === 'function') {
-                    window.DateTimeWidget.prototype.autofill_now = function() {
-                        try {
-                            if (this && arguments.length >= 0) {
-                                return existingAutofill.apply(this, arguments);
-                            }
-                            return false;
-                        } catch (error) {
-                            return false;
-                        }
-                    };
-                }
-            }
-            
-        } catch (patchError) {
-            // Silenciar errores del parche mismo
+/* ===================================================================
+   PARCHE DE EMERGENCIA - MÁS ROBUSTO para DateTimeWidget.autofill_now
+   - Evita "Cannot read properties of undefined (reading 'length')"
+   - Valida y normaliza colecciones/inputs antes de invocar al original
+   - Incluye fallback seguro si el original no existe o falla
+   =================================================================== */
+(function () {
+  'use strict';
+
+  var PATCH_FLAG = '__infolabsa_dtwidget_patched__';
+
+  function isArrayLike(x) {
+    return !!x && typeof x.length === 'number';
+  }
+  function toArray(x) {
+    if (!x) return [];
+    if (Array.isArray(x)) return x;
+    if (window.jQuery && x instanceof window.jQuery) return x.get();
+    if (isArrayLike(x)) return Array.prototype.slice.call(x);
+    return [x];
+  }
+  function setVal(el, val) {
+    try {
+      if (!el) return;
+      if (window.jQuery && (el instanceof window.jQuery)) {
+        el.val(val).trigger('change');
+        return;
+      }
+      // Colecciones
+      if (isArrayLike(el)) {
+        for (var i = 0; i < el.length; i++) setVal(el[i], val);
+        return;
+      }
+      // Nodo DOM
+      if (el.nodeType === 1) {
+        if ('value' in el) el.value = val;
+        // dispara evento change simple
+        try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e) {}
+      }
+    } catch (_eSet) {}
+  }
+  function formatDateISO(d) {
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+  }
+  function formatTimeHM(d) {
+    var h = ('0' + d.getHours()).slice(-2);
+    var m = ('0' + d.getMinutes()).slice(-2);
+    return h + ':' + m;
+  }
+
+  function applyPatchOn(DateTimeWidget) {
+    if (!DateTimeWidget || !DateTimeWidget.prototype) return;
+    if (DateTimeWidget.prototype[PATCH_FLAG]) return; // ya parcheado
+
+    var originalAuto = DateTimeWidget.prototype.autofill_now;
+
+    DateTimeWidget.prototype.autofill_now = function () {
+      try {
+        // Normaliza posibles propiedades que suelen usar estos widgets
+        // (cubrimos varias variantes comunes en SENAITE/Plone)
+        this._dateFields = toArray(this._dateFields || this.$date || this.date || this.inputDate || this.inputsDate || this.input || this.$inputs);
+        this._timeFields = toArray(this._timeFields || this.$time || this.time || this.inputTime || this.inputsTime);
+
+        // Si el original requiere length de algo, garantizamos que exista (aunque sea [])
+        if (!isArrayLike(this._dateFields)) this._dateFields = toArray(this._dateFields);
+        if (!isArrayLike(this._timeFields)) this._timeFields = toArray(this._timeFields);
+
+        // Si existe implementación original, pruébala primero de forma segura
+        if (typeof originalAuto === 'function') {
+          try {
+            return originalAuto.apply(this, arguments);
+          } catch (errOriginal) {
+            // Continuamos con fallback silencioso
+          }
         }
+
+        // Fallback: setear ahora en los campos que encontremos
+        var now = new Date();
+        if (this._dateFields.length) setVal(this._dateFields, formatDateISO(now));
+        if (this._timeFields.length) setVal(this._timeFields, formatTimeHM(now));
+        return true;
+      } catch (_err) {
+        // Silenciar completamente el error
+        return false;
+      }
     };
 
-    // Ejecutar el parche INMEDIATAMENTE
-    if (document.readyState === 'loading') {
-        // Ejecutar antes de DOMContentLoaded
-        patchDateTimeWidget();
-    } else {
-        // Ejecutar inmediatamente si el documento ya se cargó
-        setTimeout(patchDateTimeWidget, 0);
-    }
-})();
+    // Marca para no parchear dos veces
+    DateTimeWidget.prototype[PATCH_FLAG] = true;
+  }
 
+  function tryPatch() {
+    try {
+      if (window.DateTimeWidget) {
+        applyPatchOn(window.DateTimeWidget);
+        return true;
+      }
+    } catch (_e) {}
+    return false;
+  }
+
+  // 1) Si ya está definido, parchea
+  if (!tryPatch()) {
+    // 2) Si aún no existe, intercepta el setter para parchear en cuanto lo definan
+    try {
+      var _dtw = window.DateTimeWidget; // por si ya hay valor
+      Object.defineProperty(window, 'DateTimeWidget', {
+        configurable: true,
+        enumerable: true,
+        get: function () { return _dtw; },
+        set: function (v) {
+          _dtw = v;
+          try { applyPatchOn(v); } catch (_e) {}
+        }
+      });
+    } catch (_eDef) {
+      // 3) Fallback: poll rápido hasta que exista
+      var t = setInterval(function () {
+        if (tryPatch()) clearInterval(t);
+      }, 20);
+      setTimeout(function () { try { clearInterval(t); } catch (_e) {} }, 4000);
+    }
+  }
+})();
+ 
 // ===================================================================
 // CÓDIGO ORIGINAL DE INFOLABSA (sin cambios)
 // ===================================================================
