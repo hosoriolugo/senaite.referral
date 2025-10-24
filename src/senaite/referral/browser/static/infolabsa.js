@@ -344,3 +344,23 @@ document.addEventListener('DOMContentLoaded', function () {
     if (console && console.debug) console.debug('[OOR] Fallback observer error:', err);
   }
 })();
+
+// Parche para el error en datetimewidget.js - TypeError: Cannot read properties of undefined (reading 'length')
+document.addEventListener('DOMContentLoaded', function() {
+  try {
+    if (window.DateTimeWidget && window.DateTimeWidget.prototype && window.DateTimeWidget.prototype.autofill_now) {
+      var originalAutofill = window.DateTimeWidget.prototype.autofill_now;
+      window.DateTimeWidget.prototype.autofill_now = function() {
+        try {
+          return originalAutofill.apply(this, arguments);
+        } catch (error) {
+          console.warn('DateTimeWidget autofill error:', error);
+          return false;
+        }
+      };
+      console.log('[infolabsa] Parche aplicado a DateTimeWidget.autofill_now');
+    }
+  } catch (e) {
+    console.warn('[infolabsa] Error al aplicar parche a DateTimeWidget:', e);
+  }
+});
