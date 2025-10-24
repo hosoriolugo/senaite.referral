@@ -1,22 +1,26 @@
 /* eslint-disable no-console */
 /*!
  * infolabsa.js — versión segura SIN FETCH (optimizada rendimiento) + PARCHE DateTimeWidget
+ *
+ * Nota clave: este parche intenta aplicarse lo más temprano posible y
+ * además inyecta una salvaguarda en DOMContentLoaded para asegurar que
+ * DateTimeWidget.prototype.autofill_now esté parcheado ANTES de que los
+ * inicializadores de datetimewidget.js lo invoquen.
  */
 
 /* ===================================================================
-   PARCHE DE EMERGENCIA - MÁS ROBUSTO para DateTimeWidget.autofill_now
+   PARCHE ROBUSTO para DateTimeWidget.autofill_now
    - Evita "Cannot read properties of undefined (reading 'length')"
-   - Valida y normaliza colecciones/inputs antes de invocar al original
-   - Incluye fallback seguro si el original no existe o falla
+   - Normaliza colecciones/inputs antes de invocar al original
+   - Fallback seguro si el original no existe o falla
+   - Salvaguarda en DOMContentLoaded para adelantarnos a otros handlers
    =================================================================== */
 (function () {
   'use strict';
 
   var PATCH_FLAG = '__infolabsa_dtwidget_patched__';
 
-  function isArrayLike(x) {
-    return !!x && typeof x.length === 'number';
-  }
+  function isArrayLike(x) { return !!x && typeof x.length === 'number'; }
   function toArray(x) {
     if (!x) return [];
     if (Array.isArray(x)) return x;
@@ -27,108 +31,103 @@
   function setVal(el, val) {
     try {
       if (!el) return;
-      if (window.jQuery && (el instanceof window.jQuery)) {
-        el.val(val).trigger('change');
-        return;
-      }
-      // Colecciones
-      if (isArrayLike(el)) {
-        for (var i = 0; i < el.length; i++) setVal(el[i], val);
-        return;
-      }
-      // Nodo DOM
-      if (el.nodeType === 1) {
-        if ('value' in el) el.value = val;
-        // dispara evento change simple
+      if (window.jQuery && (el instanceof window.jQuery)) { el.val(val).trigger('change'); return; }
+      if (isArrayLike(el)) { for (var i=0;i<el.length;i++) setVal(el[i], val); return; }
+      if (el.nodeType === 1 && 'value' in el) {
+        el.value = val;
         try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e) {}
       }
     } catch (_eSet) {}
   }
-  function formatDateISO(d) {
-    var y = d.getFullYear();
-    var m = ('0' + (d.getMonth() + 1)).slice(-2);
-    var day = ('0' + d.getDate()).slice(-2);
-    return y + '-' + m + '-' + day;
-  }
-  function formatTimeHM(d) {
-    var h = ('0' + d.getHours()).slice(-2);
-    var m = ('0' + d.getMinutes()).slice(-2);
-    return h + ':' + m;
-  }
+  function fmtISO(d){ var y=d.getFullYear(),m=('0'+(d.getMonth()+1)).slice(-2),da=('0'+d.getDate()).slice(-2); return y+'-'+m+'-'+da; }
+  function fmtHM(d){ var h=('0'+d.getHours()).slice(-2),m=('0'+d.getMinutes()).slice(-2); return h+':'+m; }
 
   function applyPatchOn(DateTimeWidget) {
-    if (!DateTimeWidget || !DateTimeWidget.prototype) return;
-    if (DateTimeWidget.prototype[PATCH_FLAG]) return; // ya parcheado
+    try {
+      if (!DateTimeWidget || !DateTimeWidget.prototype) return;
+      if (DateTimeWidget.prototype[PATCH_FLAG]) return; // ya parcheado
 
-    var originalAuto = DateTimeWidget.prototype.autofill_now;
+      var originalAuto = DateTimeWidget.prototype.autofill_now;
 
-    DateTimeWidget.prototype.autofill_now = function () {
-      try {
-        // Normaliza posibles propiedades que suelen usar estos widgets
-        // (cubrimos varias variantes comunes en SENAITE/Plone)
-        this._dateFields = toArray(this._dateFields || this.$date || this.date || this.inputDate || this.inputsDate || this.input || this.$inputs);
-        this._timeFields = toArray(this._timeFields || this.$time || this.time || this.inputTime || this.inputsTime);
+      DateTimeWidget.prototype.autofill_now = function () {
+        try {
+          // Normaliza propiedades típicas usadas por estos widgets
+          this._dateFields = toArray(this._dateFields || this.$date || this.date || this.inputDate || this.inputsDate || this.input || this.$inputs);
+          this._timeFields = toArray(this._timeFields || this.$time || this.time || this.inputTime || this.inputsTime);
 
-        // Si el original requiere length de algo, garantizamos que exista (aunque sea [])
-        if (!isArrayLike(this._dateFields)) this._dateFields = toArray(this._dateFields);
-        if (!isArrayLike(this._timeFields)) this._timeFields = toArray(this._timeFields);
+          // Asegura que existan colecciones (aunque vacías)
+          if (!isArrayLike(this._dateFields)) this._dateFields = toArray(this._dateFields);
+          if (!isArrayLike(this._timeFields)) this._timeFields = toArray(this._timeFields);
 
-        // Si existe implementación original, pruébala primero de forma segura
-        if (typeof originalAuto === 'function') {
-          try {
-            return originalAuto.apply(this, arguments);
-          } catch (errOriginal) {
-            // Continuamos con fallback silencioso
+          // Intenta el original primero
+          if (typeof originalAuto === 'function') {
+            try { return originalAuto.apply(this, arguments); } catch (_errOriginal) { /* fallback abajo */ }
           }
-        }
 
-        // Fallback: setear ahora en los campos que encontremos
-        var now = new Date();
-        if (this._dateFields.length) setVal(this._dateFields, formatDateISO(now));
-        if (this._timeFields.length) setVal(this._timeFields, formatTimeHM(now));
-        return true;
-      } catch (_err) {
-        // Silenciar completamente el error
-        return false;
+          // Fallback: poner "ahora" de forma segura
+          var now = new Date();
+          if (this._dateFields.length) setVal(this._dateFields, fmtISO(now));
+          if (this._timeFields.length) setVal(this._timeFields, fmtHM(now));
+          return true;
+        } catch (_err) {
+          return false; // silenciar completamente
+        }
+      };
+
+      DateTimeWidget.prototype[PATCH_FLAG] = true;
+    } catch (_e) {}
+  }
+
+  // 1) Parche inmediato si ya existe
+  if (window.DateTimeWidget) applyPatchOn(window.DateTimeWidget);
+
+  // 2) Intercepta el setter para parchear en cuanto lo definan
+  try {
+    var _dtw = window.DateTimeWidget;
+    Object.defineProperty(window, 'DateTimeWidget', {
+      configurable: true,
+      enumerable: true,
+      get: function () { return _dtw; },
+      set: function (v) { _dtw = v; try { applyPatchOn(v); } catch (_e) {} }
+    });
+  } catch (_edef) {
+    // 3) Fallback: poll rápido durante un pequeño lapso
+    var t = setInterval(function () {
+      if (window.DateTimeWidget) { try { applyPatchOn(window.DateTimeWidget); } catch (_e) {} clearInterval(t); }
+    }, 20);
+    setTimeout(function () { try { clearInterval(t); } catch (_e) {} }, 4000);
+  }
+
+  // 4) Salvaguarda: envuelve addEventListener para DOMContentLoaded.
+  //    Antes de ejecutar cualquier handler de DOMContentLoaded que se registre DESPUÉS de este script,
+  //    nos aseguramos de que el parche esté aplicado.
+  (function patchDOMContentLoadedOnce(){
+    if (window.__infolabsa_dcl_patched__) return;
+    window.__infolabsa_dcl_patched__ = true;
+
+    var origAdd = document.addEventListener;
+    document.addEventListener = function(type, listener, opts){
+      if (type === 'DOMContentLoaded' && typeof listener === 'function') {
+        var wrapped = function(ev){
+          try { if (window.DateTimeWidget) applyPatchOn(window.DateTimeWidget); } catch (_e) {}
+          return listener.call(this, ev);
+        };
+        return origAdd.call(document, type, wrapped, opts);
       }
+      return origAdd.call(document, type, listener, opts);
     };
 
-    // Marca para no parchear dos veces
-    DateTimeWidget.prototype[PATCH_FLAG] = true;
-  }
-
-  function tryPatch() {
-    try {
-      if (window.DateTimeWidget) {
-        applyPatchOn(window.DateTimeWidget);
-        return true;
-      }
-    } catch (_e) {}
-    return false;
-  }
-
-  // 1) Si ya está definido, parchea
-  if (!tryPatch()) {
-    // 2) Si aún no existe, intercepta el setter para parchear en cuanto lo definan
-    try {
-      var _dtw = window.DateTimeWidget; // por si ya hay valor
-      Object.defineProperty(window, 'DateTimeWidget', {
-        configurable: true,
-        enumerable: true,
-        get: function () { return _dtw; },
-        set: function (v) {
-          _dtw = v;
-          try { applyPatchOn(v); } catch (_e) {}
-        }
-      });
-    } catch (_eDef) {
-      // 3) Fallback: poll rápido hasta que exista
-      var t = setInterval(function () {
-        if (tryPatch()) clearInterval(t);
-      }, 20);
-      setTimeout(function () { try { clearInterval(t); } catch (_e) {} }, 4000);
+    // Si el DOM ya está listo, ejecuta el parche inmediatamente
+    if (document.readyState === 'interactive' || document.readyState === 'complete') {
+      try { if (window.DateTimeWidget) applyPatchOn(window.DateTimeWidget); } catch (_e) {}
+    } else {
+      // Antes de dispararse el verdadero DOMContentLoaded, asegura el parche
+      origAdd.call(document, 'DOMContentLoaded', function(){
+        try { if (window.DateTimeWidget) applyPatchOn(window.DateTimeWidget); } catch (_e) {}
+      }, { once: true });
     }
-  }
+  })();
+
 })();
  
 // ===================================================================
@@ -225,7 +224,6 @@
       tr.setAttribute("data-row-alert","1");
       tr.setAttribute("data-infolabsa-processed","1");
 
-      // Inyecta un flag invisible para CSS más potente si lo necesitas (:has)
       var td = tr.querySelector('td') || tr;
       if (td && !td.querySelector('.oob-flag[data-oor="1"]')) {
         var span = document.createElement('span');
@@ -235,7 +233,6 @@
         td.appendChild(span);
       }
 
-      // Opcional: marca la fila de categoría si existe
       var catName = tr.getAttribute('category');
       if (catName) {
         var catRow = tr.closest('table')?.querySelector('tr.categoryrow[category="'+CSS.escape(catName)+'"]');
@@ -257,7 +254,6 @@
     return false;
   }
 
-  // Detección de OOR SOLO con lo que ya está en el DOM (texto, clases, iconos)
   function rowLooksOOR(tr){
     try{
       if (tr.classList.contains("row-flag-alert") || tr.getAttribute("data-row-alert")==="1") return true;
@@ -335,33 +331,26 @@
     if (!(document && document.body)) return;
     if (!isSamplesListPage()) { log("init: fuera de /samples (noop)"); return; }
     log("init @samples (enabled, sin fetch; observers mínimos)");
-    // una sola pasada, con pequeño delay para permitir que la tabla exista
     setTimeout(function(){ safe(function(){ scanAll(document); }); }, 100);
 
-    // rescan manual por consola si lo necesitas
     window.__infolabsa__.rescan = function(){ if (isSamplesListPage()) scanAll(document); };
 
-    // Hook oficial si existe
     document.addEventListener('listing:after-render', function(e){
       safe(function(){ scanAll(e?.target || document); });
     }, true);
 
-    // Fallback: observar SOLO <tbody> actual (ligero)
     var table = document.querySelector('table');
     var tbody = table?.tBodies?.[0] || table?.querySelector?.('tbody');
     if (tbody) {
       try {
         var mo = new MutationObserver(function(muts){
           if (muts.some(function(m){ return (m.addedNodes?.length || 0) > 0; })) {
-            // Debounce corto para lotes
             clearTimeout(mo._t);
             mo._t = setTimeout(function(){ safe(function(){ scanAll(document); }); }, 60);
           }
         });
         mo.observe(tbody, { childList: true, subtree: true });
-      } catch (err) {
-        log('observer tbody error', err);
-      }
+      } catch (err) { log('observer tbody error', err); }
     }
   }
 
@@ -372,8 +361,7 @@
   }
 })();
 
-/* ====== Vista de muestra (tabla de análisis): marca filas si ya hay icono OOR ======
-   No hace fetch; solo lee el DOM actual y aplica .row-flag-alert para que tu CSS pinte. */
+/* ====== Vista de muestra (tabla de análisis): marca filas si ya hay icono OOR ====== */
 document.addEventListener('DOMContentLoaded', function () {
   var rows = document.querySelectorAll('table.contentstable tr.contentrow.parent');
   rows.forEach(function(tr){
@@ -392,8 +380,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
-/* ====== Highlighter por iconos/texto en cualquier listing renderizado ======
-   Sin fetch. Reacciona a listing:after-render y a cambios DOM ligeros. */
+/* ====== Highlighter por iconos/texto en cualquier listing renderizado ====== */
 (function () {
   var OOR_IMG_SEL = 'img[src*="exclamation_red.svg"], img[title*="out of range" i]';
 
