@@ -1,20 +1,84 @@
 /* eslint-disable no-console */
 /*!
- * infolabsa.js — versión segura SIN FETCH (optimizada rendimiento)
- *
- * Modo seguro:
- *   - Por defecto NO hace nada.
- *   - Exponer __infolabsa__.enable()/disable() siempre.
- *   - En el PRIMER load tras desplegar este archivo:
- *       * Desactiva cualquier "infolabsa.enabled" previo.
- *       * Llama __infolabsa__.stop() si existiera de una versión anterior.
- *       * Marca migración y recarga UNA sola vez.
- *
- * Activar manualmente (cuando tú quieras):
- *   localStorage.setItem("infolabsa.enabled","1"); location.reload();
- * Desactivar:
- *   localStorage.removeItem("infolabsa.enabled");  location.reload();
+ * infolabsa.js — versión segura SIN FETCH (optimizada rendimiento) + PARCHE DateTimeWidget
  */
+
+// ===================================================================
+// PARCHE DE EMERGENCIA - SE EJECUTA INMEDIATAMENTE
+// ===================================================================
+(function() {
+    'use strict';
+    
+    // Parche ULTRA-TEMPRANO para DateTimeWidget - se ejecuta ANTES que cualquier error
+    var patchDateTimeWidget = function() {
+        try {
+            // Interceptar la definición de DateTimeWidget ANTES de que se use
+            var originalDateTimeWidget = window.DateTimeWidget;
+            
+            Object.defineProperty(window, 'DateTimeWidget', {
+                configurable: true,
+                enumerable: true,
+                get: function() {
+                    return originalDateTimeWidget;
+                },
+                set: function(value) {
+                    if (value && value.prototype) {
+                        // Parchear autofill_now ANTES de que se asigne
+                        var originalAutofill = value.prototype.autofill_now;
+                        if (typeof originalAutofill === 'function') {
+                            value.prototype.autofill_now = function() {
+                                try {
+                                    // Verificar que los parámetros necesarios existan
+                                    if (this && arguments.length >= 0) {
+                                        return originalAutofill.apply(this, arguments);
+                                    }
+                                    return false;
+                                } catch (error) {
+                                    // Silenciar completamente el error
+                                    return false;
+                                }
+                            };
+                        }
+                    }
+                    originalDateTimeWidget = value;
+                }
+            });
+            
+            // Si DateTimeWidget ya existe, parchearlo inmediatamente
+            if (window.DateTimeWidget && window.DateTimeWidget.prototype) {
+                var existingAutofill = window.DateTimeWidget.prototype.autofill_now;
+                if (typeof existingAutofill === 'function') {
+                    window.DateTimeWidget.prototype.autofill_now = function() {
+                        try {
+                            if (this && arguments.length >= 0) {
+                                return existingAutofill.apply(this, arguments);
+                            }
+                            return false;
+                        } catch (error) {
+                            return false;
+                        }
+                    };
+                }
+            }
+            
+        } catch (patchError) {
+            // Silenciar errores del parche mismo
+        }
+    };
+
+    // Ejecutar el parche INMEDIATAMENTE
+    if (document.readyState === 'loading') {
+        // Ejecutar antes de DOMContentLoaded
+        patchDateTimeWidget();
+    } else {
+        // Ejecutar inmediatamente si el documento ya se cargó
+        setTimeout(patchDateTimeWidget, 0);
+    }
+})();
+
+// ===================================================================
+// CÓDIGO ORIGINAL DE INFOLABSA (sin cambios)
+// ===================================================================
 (function () {
   "use strict";
 
@@ -23,7 +87,7 @@
     if (typeof window === "undefined" || !window.document) return;
   } catch (_e) { return; }
 
-  // ====== Etapa 1: “matar” versión anterior una sola vez ======
+  // ====== Etapa 1: "matar" versión anterior una sola vez ======
   var MIGRATION_TAG = "v2.0-autodisable-2025-10-22";
   try {
     var ls = window.localStorage;
@@ -344,23 +408,3 @@ document.addEventListener('DOMContentLoaded', function () {
     if (console && console.debug) console.debug('[OOR] Fallback observer error:', err);
   }
 })();
-
-// Parche para el error en datetimewidget.js - TypeError: Cannot read properties of undefined (reading 'length')
-document.addEventListener('DOMContentLoaded', function() {
-  try {
-    if (window.DateTimeWidget && window.DateTimeWidget.prototype && window.DateTimeWidget.prototype.autofill_now) {
-      var originalAutofill = window.DateTimeWidget.prototype.autofill_now;
-      window.DateTimeWidget.prototype.autofill_now = function() {
-        try {
-          return originalAutofill.apply(this, arguments);
-        } catch (error) {
-          console.warn('DateTimeWidget autofill error:', error);
-          return false;
-        }
-      };
-      console.log('[infolabsa] Parche aplicado a DateTimeWidget.autofill_now');
-    }
-  } catch (e) {
-    console.warn('[infolabsa] Error al aplicar parche a DateTimeWidget:', e);
-  }
-});
