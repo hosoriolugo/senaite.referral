@@ -2,11 +2,62 @@
     xmlns="http://namespaces.zope.org/zope"
     xmlns:browser="http://namespaces.zope.org/browser">
 
-  <!-- Sombrear la vista original con total prioridad -->
+  <!-- ============
+       REDIRECCIÓN DURA DEL NOMBRE ANTIGUO
+       /senaite-dashboard  -> 301 -> /infolabsa-dashboard
+       ============ -->
+
+  <!-- Capa Spotlight (probable registro original) -->
   <browser:page
       name="senaite-dashboard"
-      for="*"
-      class="senaite.referral.browser.dashboard_alias.RedirectToInfolabsaDashboard"
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      layer="senaite.app.spotlight.interfaces.ISenaiteAppSpotlightLayer"
+      class=".browser.dashboard_alias.RedirectToInfolabsaDashboard"
+      permission="zope2.View" />
+
+  <!-- Capa SENAITE Core (por si el registro viene de aquí en tu build) -->
+  <browser:page
+      name="senaite-dashboard"
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      layer="senaite.core.interfaces.ISenaiteCoreLayer"
+      class=".browser.dashboard_alias.RedirectToInfolabsaDashboard"
+      permission="zope2.View" />
+
+  <!-- Capa por defecto (fallback absoluto) -->
+  <browser:page
+      name="senaite-dashboard"
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      layer="zope.publisher.interfaces.browser.IDefaultBrowserLayer"
+      class=".browser.dashboard_alias.RedirectToInfolabsaDashboard"
+      permission="zope2.View" />
+
+  <!-- ============
+       ALIAS NUEVO
+       /infolabsa-dashboard  -> delega al dashboard real
+       ============ -->
+
+  <!-- Spotlight -->
+  <browser:page
+      name="infolabsa-dashboard"
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      layer="senaite.app.spotlight.interfaces.ISenaiteAppSpotlightLayer"
+      class=".browser.dashboard_alias.InfolabsaDashboardView"
+      permission="zope2.View" />
+
+  <!-- SENAITE Core -->
+  <browser:page
+      name="infolabsa-dashboard"
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      layer="senaite.core.interfaces.ISenaiteCoreLayer"
+      class=".browser.dashboard_alias.InfolabsaDashboardView"
+      permission="zope2.View" />
+
+  <!-- Default -->
+  <browser:page
+      name="infolabsa-dashboard"
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      layer="zope.publisher.interfaces.browser.IDefaultBrowserLayer"
+      class=".browser.dashboard_alias.InfolabsaDashboardView"
       permission="zope2.View" />
 
 </configure>
