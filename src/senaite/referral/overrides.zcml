@@ -1,0 +1,12 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser">
+
+  <!-- Sombrear la vista original con total prioridad -->
+  <browser:page
+      name="senaite-dashboard"
+      for="*"
+      class="senaite.referral.browser.dashboard_alias.RedirectToInfolabsaDashboard"
+      permission="zope2.View" />
+
+</configure>
