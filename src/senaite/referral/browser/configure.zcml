@@ -48,7 +48,7 @@
   <browser:page
       for="*"
       name="retry_notification"
-      class=".retry_notification.RetryNotificationView"
+      class=".retry_notification.retryNotificationView"
       permission="senaite.core.permissions.ManageBika"
       layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
 
@@ -77,6 +77,18 @@
       name="infolabsa-dashboard"
       for="*"
       class=".dashboard_alias.InfolabsaDashboardView"
+      permission="zope2.View"
+      layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
+
+  <!-- ========================= -->
+  <!-- Override con redirección  -->
+  <!-- Fuerza /senaite-dashboard -> /infolabsa-dashboard (301) -->
+  <!-- Requiere: browser/dashboard_alias.py (RedirectToInfolabsaDashboard) -->
+  <!-- ========================= -->
+  <browser:page
+      name="senaite-dashboard"
+      for="*"
+      class=".dashboard_alias.RedirectToInfolabsaDashboard"
       permission="zope2.View"
       layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
 
