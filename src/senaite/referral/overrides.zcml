@@ -2,34 +2,21 @@
     xmlns="http://namespaces.zope.org/zope"
     xmlns:browser="http://namespaces.zope.org/browser">
 
-  <!--
-    Redirección dura:
-      /senaite-dashboard  -> 301 -> /infolabsa-dashboard
-    NOTA:
-      - Sin layer “Spotlight” (no está disponible en tu entorno).
-      - Registramos en el Default layer y en ISenaiteCoreLayer.
-  -->
-
-  <!-- Default browser layer (cubre la mayoría de casos) -->
+  <!-- Alias nuevo que apunta al dashboard real del core -->
   <browser:page
-      name="senaite-dashboard"
       for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      class=".browser.dashboard_alias.RedirectToInfolabsaDashboard"
-      permission="zope2.View" />
+      name="infolabsa-dashboard"
+      class="senaite.core.browser.dashboard.dashboard.DashboardView"
+      permission="zope.Public"
+      layer="senaite.core.interfaces.ISenaiteCore"
+  />
 
-  <!-- Capa Core de SENAITE (existe en tu build) -->
+  <!-- Override duro: /senaite-dashboard -> 301 -> /infolabsa-dashboard -->
   <browser:page
-      name="senaite-dashboard"
       for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      layer="senaite.core.interfaces.ISenaiteCoreLayer"
+      name="senaite-dashboard"
       class=".browser.dashboard_alias.RedirectToInfolabsaDashboard"
-      permission="zope2.View" />
-
-  <!--
-    Alias nuevo:
-      /infolabsa-dashboard  -> delega en la vista real 'senaite-dashboard'
-    (El registro del alias lo dejamos en browser/configure.zcml,
-     en tu propia layer ISenaiteReferralLayer, como ya lo tienes.)
-  -->
-
+      permission="zope.Public"
+      layer="senaite.core.interfaces.ISenaiteCore"
+  />
 </configure>
