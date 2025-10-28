@@ -68,16 +68,5 @@
       permission="zope2.View"
       layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
 
-  <!-- Alias del dashboard: /infolabsa-dashboard -->
-  <!-- Delegará en la vista real 'senaite-dashboard' -->
-  <browser:page
-      name="infolabsa-dashboard"
-      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      class=".dashboard_alias.InfolabsaDashboardView"
-      permission="zope2.View"
-      layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
-
-  <!-- IMPORTANTE: no registrar aquí 'senaite-dashboard'.
-       Ese override vive en overrides.zcml para todas las layers necesarias. -->
-
+  <!-- IMPORTANTE: sin registros de 'infolabsa-dashboard' ni 'senaite-dashboard' aquí -->
 </configure>
