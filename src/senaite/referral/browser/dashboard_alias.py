@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Alias robusto para el dashboard:
-exponer .../infolabsa-dashboard delegando a la vista real 'senaite-dashboard'
-sin importar su clase/ubicación interna.
+Alias y redirección del dashboard:
+
+- /infolabsa-dashboard  -> delega a la vista real 'senaite-dashboard'
+- /senaite-dashboard    -> 301 hacia /infolabsa-dashboard (misma querystring)
 
 Compatible con SENAITE 2.6 (Py2.7, Plone 4.3.x).
 """
@@ -12,16 +13,20 @@ from zope.component import getMultiAdapter
 
 
 class InfolabsaDashboardView(BrowserView):
-    """Proxy/alias del dashboard oficial.
-
-    En lugar de heredar la clase concreta (variable entre versiones),
-    resolvemos la vista por nombre ('senaite-dashboard') y le
-    delegamos la ejecución. Así evitamos ImportError.
-    """
-
+    """Alias del dashboard oficial."""
     def __call__(self):
-        # Obtiene la vista original registrada como 'senaite-dashboard'
-        base = getMultiAdapter((self.context, self.request),
-                               name='senaite-dashboard')
-        # Ejecuta y retorna exactamente lo que entregaría el dashboard original
+        base = getMultiAdapter((self.context, self.request), name='senaite-dashboard')
         return base()
+
+
+class RedirectToInfolabsaDashboard(BrowserView):
+    """Sobrescribe 'senaite-dashboard' para redirigir a 'infolabsa-dashboard'."""
+    def __call__(self):
+        req = self.request
+        qs = req.get('QUERY_STRING', '')
+        url = self.context.absolute_url() + '/infolabsa-dashboard'
+        if qs:
+            url = url + '?' + qs
+        resp = req.response
+        resp.redirect(url, status=301)
+        return u""
