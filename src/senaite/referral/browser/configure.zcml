@@ -44,11 +44,11 @@
       permission="senaite.core.permissions.ManageAnalysisRequests"
       layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
 
-  <!-- Retry notification -->
+  <!-- Retry notification (FIX: clase correcta CamelCase) -->
   <browser:page
       for="*"
       name="retry_notification"
-      class=".retry_notification.retryNotificationView"
+      class=".retry_notification.RetryNotificationView"
       permission="senaite.core.permissions.ManageBika"
       layer="senaite.referral.interfaces.ISenaiteReferralLayer" />
 
