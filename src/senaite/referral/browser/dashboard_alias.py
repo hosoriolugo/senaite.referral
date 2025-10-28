@@ -1,33 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-Alias limpio del dashboard estándar de SENAITE bajo la ruta
-.../infolabsa-dashboard
+Alias robusto para el dashboard:
+exponer .../infolabsa-dashboard delegando a la vista real 'senaite-dashboard'
+sin importar su clase/ubicación interna.
 
-Este módulo **no cambia** ninguna lógica ni plantilla: solo hereda
-del DashboardView original para exponer la misma vista con otro nombre.
-Probado para Python 2.7 en SENAITE 2.6.
-
-Ruta sugerida del archivo:
-  src/senaite/referral/browser/dashboard_alias.py
+Compatible con SENAITE 2.6 (Py2.7, Plone 4.3.x).
 """
 
-# Defensivo: algunas instalaciones empaquetan el dashboard en ubicaciones distintas.
-try:
-    # Ubicación habitual en SENAITE 2.6
-    from senaite.core.dashboard.browser.dashboard import DashboardView as _BaseDashboardView
-except Exception:
-    # Fallback por si el paquete expone otra ruta interna
-    from senaite.core.browser.dashboard import DashboardView as _BaseDashboardView  # noqa
+from Products.Five.browser import BrowserView
+from zope.component import getMultiAdapter
 
 
-class InfolabsaDashboardView(_BaseDashboardView):
-    """Alias del Dashboard de SENAITE.
+class InfolabsaDashboardView(BrowserView):
+    """Proxy/alias del dashboard oficial.
 
-    No sobreescribimos nada para conservar:
-      - permisos
-      - plantillas
-      - lógica de búsqueda/estadísticas
-      - recursos JS/CSS
+    En lugar de heredar la clase concreta (variable entre versiones),
+    resolvemos la vista por nombre ('senaite-dashboard') y le
+    delegamos la ejecución. Así evitamos ImportError.
     """
-    # Sin cambios: hereda todo del dashboard original
-    pass
+
+    def __call__(self):
+        # Obtiene la vista original registrada como 'senaite-dashboard'
+        base = getMultiAdapter((self.context, self.request),
+                               name='senaite-dashboard')
+        # Ejecuta y retorna exactamente lo que entregaría el dashboard original
+        return base()
