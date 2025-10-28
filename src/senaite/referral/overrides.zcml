@@ -2,20 +2,22 @@
     xmlns="http://namespaces.zope.org/zope"
     xmlns:browser="http://namespaces.zope.org/browser">
 
-  <!-- ============
-       REDIRECCIÓN DURA DEL NOMBRE ANTIGUO
-       /senaite-dashboard  -> 301 -> /infolabsa-dashboard
-       ============ -->
+  <!--
+    Redirección dura:
+      /senaite-dashboard  -> 301 -> /infolabsa-dashboard
+    NOTA:
+      - Sin layer “Spotlight” (no está disponible en tu entorno).
+      - Registramos en el Default layer y en ISenaiteCoreLayer.
+  -->
 
-  <!-- Capa Spotlight (ruta correcta del layer) -->
+  <!-- Default browser layer (cubre la mayoría de casos) -->
   <browser:page
       name="senaite-dashboard"
       for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      layer="senaite.app.spotlight.browser.interfaces.ISenaiteAppSpotlightLayer"
       class=".browser.dashboard_alias.RedirectToInfolabsaDashboard"
       permission="zope2.View" />
 
-  <!-- Capa SENAITE Core -->
+  <!-- Capa Core de SENAITE (existe en tu build) -->
   <browser:page
       name="senaite-dashboard"
       for="Products.CMFPlone.interfaces.IPloneSiteRoot"
@@ -23,41 +25,11 @@
       class=".browser.dashboard_alias.RedirectToInfolabsaDashboard"
       permission="zope2.View" />
 
-  <!-- Capa por defecto (fallback absoluto) -->
-  <browser:page
-      name="senaite-dashboard"
-      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      layer="zope.publisher.interfaces.browser.IDefaultBrowserLayer"
-      class=".browser.dashboard_alias.RedirectToInfolabsaDashboard"
-      permission="zope2.View" />
-
-  <!-- ============
-       ALIAS NUEVO
-       /infolabsa-dashboard  -> delega al dashboard real
-       ============ -->
-
-  <!-- Spotlight -->
-  <browser:page
-      name="infolabsa-dashboard"
-      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      layer="senaite.app.spotlight.browser.interfaces.ISenaiteAppSpotlightLayer"
-      class=".browser.dashboard_alias.InfolabsaDashboardView"
-      permission="zope2.View" />
-
-  <!-- SENAITE Core -->
-  <browser:page
-      name="infolabsa-dashboard"
-      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      layer="senaite.core.interfaces.ISenaiteCoreLayer"
-      class=".browser.dashboard_alias.InfolabsaDashboardView"
-      permission="zope2.View" />
-
-  <!-- Default -->
-  <browser:page
-      name="infolabsa-dashboard"
-      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      layer="zope.publisher.interfaces.browser.IDefaultBrowserLayer"
-      class=".browser.dashboard_alias.InfolabsaDashboardView"
-      permission="zope2.View" />
+  <!--
+    Alias nuevo:
+      /infolabsa-dashboard  -> delega en la vista real 'senaite-dashboard'
+    (El registro del alias lo dejamos en browser/configure.zcml,
+     en tu propia layer ISenaiteReferralLayer, como ya lo tienes.)
+  -->
 
 </configure>
