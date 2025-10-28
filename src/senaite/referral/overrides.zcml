@@ -7,15 +7,15 @@
        /senaite-dashboard  -> 301 -> /infolabsa-dashboard
        ============ -->
 
-  <!-- Capa Spotlight (probable registro original) -->
+  <!-- Capa Spotlight (ruta correcta del layer) -->
   <browser:page
       name="senaite-dashboard"
       for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      layer="senaite.app.spotlight.interfaces.ISenaiteAppSpotlightLayer"
+      layer="senaite.app.spotlight.browser.interfaces.ISenaiteAppSpotlightLayer"
       class=".browser.dashboard_alias.RedirectToInfolabsaDashboard"
       permission="zope2.View" />
 
-  <!-- Capa SENAITE Core (por si el registro viene de aquí en tu build) -->
+  <!-- Capa SENAITE Core -->
   <browser:page
       name="senaite-dashboard"
       for="Products.CMFPlone.interfaces.IPloneSiteRoot"
@@ -40,7 +40,7 @@
   <browser:page
       name="infolabsa-dashboard"
       for="Products.CMFPlone.interfaces.IPloneSiteRoot"
-      layer="senaite.app.spotlight.interfaces.ISenaiteAppSpotlightLayer"
+      layer="senaite.app.spotlight.browser.interfaces.ISenaiteAppSpotlightLayer"
       class=".browser.dashboard_alias.InfolabsaDashboardView"
       permission="zope2.View" />
 
